@@ -57,7 +57,7 @@ class DQN_Agent():
     def choose_action(self, observation):
         actions = range(self.n_actions)
         log_probabilities = np.zeros((1,4))[0]
-        probabilities = np.zeros((1,4))[0]
+        probabilities = np.zeros((1,4))
         action_probabilities = np.zeros((1,4))[0]
         rand = np.random.random()
         if rand < self.epsilon:
@@ -161,11 +161,12 @@ class PPO_Agent:
         value = value.numpy()[0]
         log_probability = log_probabilities.numpy()[0]
 
-        return action, value, log_probability
+        return action, value, log_probability, probs
 
     def train(self):
         advantages = self.buffer.calculate_advantages(self.gamma)
         advantages = np.array(advantages)
+        #print(advantages)
         batches = self.buffer.generate_batches()
         losses = []
         actor_losses = []
@@ -196,6 +197,8 @@ class PPO_Agent:
             self.critic_optimizer.apply_gradients(zip(critic_grads, self.critic.trainable_variables))
 
         self.buffer.reset()
+        if(np.isnan(np.mean(losses))):
+            print('No training yet.')
         return np.mean(losses), np.mean(actor_losses), np.mean(critic_losses)
 
     def calculate_losses(self, new_probabilities, old_probabilities, new_values, advantages, batch):

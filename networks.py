@@ -87,9 +87,9 @@ class Conv_Network(tf.keras.Model):
             self.layer_single_conv = self.convolution = tf.keras.layers.Conv2D(32, 3, padding='same', data_format='channels_first') # use default for strides = 1 and padding = 'same' to keep same size
             self.layer_single_conv_two = self.convolution = tf.keras.layers.Conv2D(32, 3, padding='same', data_format='channels_first')
         self.lstm = tf.keras.layers.LSTM(256, activation='tanh', recurrent_activation='sigmoid',)
-        self.dense_one = tf.keras.layers.Dense(32, activation=tf.nn.relu)#, kernel_initializer=tf.initializers.random_normal, bias_initializer=tf.initializers.zeros)
-        self.dense_two = tf.keras.layers.Dense(32, activation=tf.nn.relu)#, kernel_initializer=tf.initializers.random_normal, bias_initializer=tf.initializers.zeros)
-        self.layer_out = tf.keras.layers.Dense(units = n_actions, activation = tf.nn.softmax, use_bias=False)
+        self.dense_one = tf.keras.layers.Dense(32, activation=tf.nn.relu, kernel_initializer=tf.initializers.random_normal)#, bias_initializer=tf.initializers.zeros)
+        self.dense_two = tf.keras.layers.Dense(32, activation=tf.nn.relu, kernel_initializer=tf.initializers.random_normal)#, bias_initializer=tf.initializers.zeros)
+        self.layer_out = tf.keras.layers.Dense(units = n_actions, activation = tf.nn.softmax)
         self.flatten = tf.keras.layers.Flatten()
 
     @tf.function

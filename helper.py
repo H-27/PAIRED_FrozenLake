@@ -20,9 +20,9 @@ def reward_function(reward, done):
     return reward
 
 old_global_distance = None
-def reward_function(reward, done, new_reward, punishment, step_penalty, distance = 0, map_size = (4,4), scaling_factor = 0.5):
+def reward_function(reward, done, new_reward, punishment, step_penalty, distance = 0, sigma=5, scaling_factor = 0.5):
     global old_global_distance
-    sigma = 5
+    distance_difference = [0]
     if distance != 0:
         #distance_bonus = 0.1 * (1 / (distance + 1))
         old_distance = old_global_distance
@@ -44,10 +44,11 @@ def reward_function(reward, done, new_reward, punishment, step_penalty, distance
     # case for goal
     elif (done and reward > 0): # reached goal
         reward = new_reward
-
+    if(old_global_distance != None):
+        distance_difference = old_global_distance - distance
     old_global_distance = distance
     #print(f'Distance {distance} and bonus {distance_bonus}')
-    return reward + distance_bonus.item(), distance_bonus.item()
+    return reward + distance_bonus.item(), distance_bonus.item(), distance_difference
 
 def gaussian_potential_function(distance_to_goal, map_size):
     # Increase sigma for a wider Gaussian curve
@@ -187,3 +188,25 @@ def evaluate_policy(env, env_map, agent):
     #print(f'Policy Win rate: {wins}%')
     old_state, _ = env.reset()
     return wins
+
+def show_PPO_probs(dims, agent, env_map):
+    n = dims[1] * dims[0]
+    for i in range(n):
+        _, state = env_map.map_step(i)
+        action, value, log, probs = agent.choose_action(state)
+        print(f'For state {i}: Probs Left: {probs[0]}, Probs Down: {probs[0]}, Probs Right: {probs[0]}, Probs Up: {probs[0]}')
+def show_PPO_value(dims, agent, env_map):
+    n = dims[1] * dims[0]
+    for i in range(n):
+        _, state = env_map.map_step(i)
+        action, value, log, probs = agent.choose_action(state)
+        print(f'For state {i}: Value: {value}')
+
+def show_DQN_probs(dims, agent, env_map):
+    n = dims[1] * dims[0]
+    for i in range(n):
+        _, state = env_map.map_step(i)
+        state = np.expand_dims(state, axis=0)
+        probs = agent.network(state)
+        print(f'For state {i}: Probs Left: {probs[0][0]}, Probs Down: {probs[0][1]}, Probs Right: {probs[0][2]}, Probs Up: {probs[0][3]}')
+
