@@ -6,6 +6,8 @@ import datetime
 import os
 import numpy as np
 import pandas as pd
+import gymnasium as gym
+from gymnasium.wrappers import RecordVideo
 
 def reward_function(reward, done):
     # for every step
@@ -166,27 +168,26 @@ def visualize_and_save_metrics(metrics, output_filename='metrics.png'):
     print("DataFrame saved to metrics.csv")
 
 def evaluate_policy(env, env_map, agent):
+    video_folder = os.path.join(os.path.join(os.path.expanduser('~')), 'Desktop/Videos/')
     wins = 0
-    # play game
-    old_state, _ = env.reset()
-    _, old_state = env_map.map_step(old_state)
+    done = False
     for e in range(100):
-        action, probs = agent.choose_action(old_state)
-        new_state, reward, done, second_flag, info = env.step(action)
-        _, new_state = env_map.map_step(new_state)
-        old_state = new_state
-        # check win
-        if done:
-            old_state, _ = env.reset()
-            _, old_state = env_map.map_step(old_state)
-        if (done and reward > 1):
+        env = RecordVideo(env, video_folder=video_folder, episode_id=e)
+        # play game
+        old_state, _ = env.reset()
+        _, old_state = env_map.map_step(old_state)
+        while not done:
+            action, probs = agent.choose_action(old_state)
+            new_state, reward, done, second_flag, info = env.step(action)
+            _, new_state = env_map.map_step(new_state)
+            distance = get_distance(new_state)
+            old_state = new_state
+        if (distance == 0):
             # log win
             wins += 1
-            old_state, _ = env.reset()
-            _, old_state = env_map.map_step(old_state)
+        env.close()
     #print win rate
-    #print(f'Policy Win rate: {wins}%')
-    old_state, _ = env.reset()
+    print(f'Policy Win rate: {wins}%')
     return wins
 
 def show_PPO_probs(dims, agent, env_map):
