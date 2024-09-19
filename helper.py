@@ -211,3 +211,42 @@ def show_DQN_probs(dims, agent, env_map):
         probs = agent.network(state)
         print(f'For state {i}: Probs Left: {probs[0][0]}, Probs Down: {probs[0][1]}, Probs Right: {probs[0][2]}, Probs Up: {probs[0][3]}')
 
+def get_shortest_possible_length(env, actions=[], visited=set()):
+
+    # get env to current state
+    state = env.reset()
+    if(actions):
+        for a in actions:
+            state, reward, done, info = env.step(a)
+            if done:
+                break
+    # if visited, skip
+    if state in visited:
+        return None
+    visited.add(state)
+
+    # if longer than possible, skip
+    if len(actions) >= env.observation_space.n:
+        return None
+
+    # check all possible actions and
+    for action in range(env.action_space.n):
+        env.reset()
+        # get env to current state
+        if actions:
+            for a in actions:
+                env.step(a)
+
+        new_state, reward, done, info = env.step(action)
+        # return if goal found
+        if done and reward == 1:
+            actions.append(action)
+            return actions
+        # reapeat if not found
+        if not done:
+            actions.append(action)
+            shortest_path = get_shortest_possible_length(env, actions.copy(), visited.copy())
+            if shortest_path:
+                return shortest_path
+            actions.pop()
+    return None
