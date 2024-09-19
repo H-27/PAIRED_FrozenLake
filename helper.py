@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import gymnasium as gym
 from gymnasium.wrappers import RecordVideo
+import networkx as nx
 
 def reward_function(reward, done):
     # for every step
@@ -61,6 +62,10 @@ def calculate_coordinates(position, n_rows):
     y = (position / n_rows) - (position % n_rows / n_rows)
     x = position - y * n_rows
     return int(y), int(x)
+
+def calculate_position(y, x, n_rows):
+    position = y * n_rows + x
+    return position
 
 def squeeze_map(env_map):
     squeezed_map = []
@@ -211,42 +216,49 @@ def show_DQN_probs(dims, agent, env_map):
         probs = agent.network(state)
         print(f'For state {i}: Probs Left: {probs[0][0]}, Probs Down: {probs[0][1]}, Probs Right: {probs[0][2]}, Probs Up: {probs[0][3]}')
 
-def get_shortest_possible_length(env, actions=[], visited=set()):
+def set_state(env, actions):
+    for a in actions:
+        state, reward, done, truncated, info = env.step(a)
+    return env, state
 
-    # get env to current state
-    state = env.reset()
-    if(actions):
-        for a in actions:
-            state, reward, done, info = env.step(a)
-            if done:
-                break
-    # if visited, skip
-    if state in visited:
-        return None
-    visited.add(state)
+def reset_state(env, actions):
+    state, _ = env.reset()
+    if actions:
+        env, state = set_state(env, actions)
+    return env, state
 
-    # if longer than possible, skip
-    if len(actions) >= env.observation_space.n:
-        return None
 
-    # check all possible actions and
-    for action in range(env.action_space.n):
-        env.reset()
-        # get env to current state
-        if actions:
-            for a in actions:
-                env.step(a)
+def get_shortest_possible_length(adv_map):
+    # Define the map with blocked states represented by 0
+    grid = np.where(adv_map == 'H', 0, 1)
+    # Create an empty graph
+    graph = nx.Graph()
+    # Get start and goal position
+    p_y, p_x = np.where(adv_map == 'S')
+    start_state = calculate_position(p_y, p_x, adv_map.shape[0])
+    g_y, g_x = np.where(adv_map == 'G')
+    goal_state = calculate_position(g_y, g_x, adv_map.shape[0])
+    # Add nodes and edges based on the map
+    rows, cols = grid.shape
+    for row in range(rows):
+        for col in range(cols):
+            if grid[row, col] == 1:
+                node = row * cols + col
+                graph.add_node(node)
+                # Add edges to neighbors (up, down, left, right)
+                if row > 0 and grid[row - 1, col] == 1:
+                    graph.add_edge(node, (row - 1) * cols + col)
+                if row < rows - 1 and grid[row + 1, col] == 1:
+                    graph.add_edge(node, (row + 1) * cols + col)
+                if col > 0 and grid[row, col - 1] == 1:
+                    graph.add_edge(node, row * cols + (col - 1))
+                if col < cols - 1 and grid[row, col + 1] == 1:
+                    graph.add_edge(node, row * cols + (col + 1))
+    try:
+        shortest_path = nx.shortest_path(graph, source=start_state[0], target=goal_state[0])
+        shortest_path_length = len(shortest_path)
+    except nx.NetworkXNoPath:
+        shortest_path = None
+        shortest_path_length = (cols - 2) * (rows - 2) + 1
 
-        new_state, reward, done, info = env.step(action)
-        # return if goal found
-        if done and reward == 1:
-            actions.append(action)
-            return actions
-        # reapeat if not found
-        if not done:
-            actions.append(action)
-            shortest_path = get_shortest_possible_length(env, actions.copy(), visited.copy())
-            if shortest_path:
-                return shortest_path
-            actions.pop()
-    return None
+    return shortest_path, shortest_path_length

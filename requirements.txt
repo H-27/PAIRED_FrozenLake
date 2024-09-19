@@ -9,3 +9,4 @@ pandas==2.1.4
 PyQt5==5.13.2
 optuna
 moviepy
+networkx
