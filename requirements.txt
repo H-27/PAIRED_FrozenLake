@@ -10,3 +10,4 @@ PyQt5==5.13.2
 optuna
 moviepy
 networkx
+optuna-integration

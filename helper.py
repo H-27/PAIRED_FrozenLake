@@ -9,6 +9,7 @@ import pandas as pd
 import gymnasium as gym
 from gymnasium.wrappers import RecordVideo
 import networkx as nx
+import tensorflow as tf
 
 def reward_function(reward, done):
     # for every step
@@ -103,7 +104,6 @@ def save_model(network, filename, use_timestamp = False):
     network.save_weights(pathname)
 
 def load_model(network, filepath):
-    network.built = True
     filepath = '/home/jens/Desktop/Models/' + filepath + '/cp.ckpt'
     network.load_weights(filepath)
 
@@ -177,7 +177,12 @@ def evaluate_policy(env, env_map, agent):
     wins = 0
     done = False
     for e in range(100):
-        env = RecordVideo(env, video_folder=video_folder, episode_id=e)
+        # Record video every 10th episode using the 'name_prefix' argument
+        if e % 10 == 0:
+            env = RecordVideo(env, video_folder=video_folder, name_prefix=e)
+        else:
+            env = env  # Continue using the original environment without recording
+
         # play game
         old_state, _ = env.reset()
         _, old_state = env_map.map_step(old_state)
@@ -263,15 +268,21 @@ def get_shortest_possible_length(adv_map):
 
     return shortest_path, shortest_path_length
 
-def compute_adversary_block_budget(self, antag_r_max, env_idx,
-                                     use_shortest_path=True):
+def get_num_blocks(adv_map):
+    grid = np.where(adv_map == 'H', 0, 1)
+    count = 0
+    for row in grid:
+        count += sum(1 for num in row if num == 0)
+    return count
+
+def compute_adversary_block_budget(self, antag_r_max, adv_map, use_shortest_path=True, block_budget_weight = 0):
     """Compute block budget reward based on antagonist score."""
     # If block_budget_weight is 0, will return 0.
     if use_shortest_path:
       budget = self.env.get_shortest_path_length()
     else:
-      budget = self.env.get_num_blocks()
-    weighted_budget = budget * self.adversary_env[env_idx].block_budget_weight
+      budget = get_num_blocks(adv_map)
+    weighted_budget = budget * block_budget_weight
     antag_didnt_score = tf.cast(tf.math.equal(antag_r_max, 0), tf.float32)
 
     # Number of blocks gives a negative penalty if the antagonist didn't score,
@@ -279,6 +290,14 @@ def compute_adversary_block_budget(self, antag_r_max, env_idx,
     block_budget_reward = (antag_didnt_score * -weighted_budget +
                            (1 - antag_didnt_score) * weighted_budget)
 
-    logging.info('Environment block budget reward: %f',
+    logging.info(f'Environment block budget reward: %f',
                  tf.reduce_mean(block_budget_reward).numpy())
     return block_budget_reward
+
+def calculate_cumulative_discounted_reward(rewards, gamma):
+  cumulative_reward = 0
+  discounted_rewards = []
+  for i in reversed(range(len(rewards))):  # Iterate in reverse
+      cumulative_reward = rewards[i] + (gamma ** i) * cumulative_reward
+      discounted_rewards.insert(0, cumulative_reward)
+  return discounted_rewards
