@@ -262,3 +262,23 @@ def get_shortest_possible_length(adv_map):
         shortest_path_length = (cols - 2) * (rows - 2) + 1
 
     return shortest_path, shortest_path_length
+
+def compute_adversary_block_budget(self, antag_r_max, env_idx,
+                                     use_shortest_path=True):
+    """Compute block budget reward based on antagonist score."""
+    # If block_budget_weight is 0, will return 0.
+    if use_shortest_path:
+      budget = self.env.get_shortest_path_length()
+    else:
+      budget = self.env.get_num_blocks()
+    weighted_budget = budget * self.adversary_env[env_idx].block_budget_weight
+    antag_didnt_score = tf.cast(tf.math.equal(antag_r_max, 0), tf.float32)
+
+    # Number of blocks gives a negative penalty if the antagonist didn't score,
+    # else becomes a positive reward.
+    block_budget_reward = (antag_didnt_score * -weighted_budget +
+                           (1 - antag_didnt_score) * weighted_budget)
+
+    logging.info('Environment block budget reward: %f',
+                 tf.reduce_mean(block_budget_reward).numpy())
+    return block_budget_reward

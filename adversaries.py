@@ -167,6 +167,9 @@ class DQN_Adversary():
         self.block_budget = int(np.round(self.n_possible_state_values * block_budget_multiplier) + 2)
         self.initial_map = np.zeros((3, map_height, map_width))
 
+    def epsilon_decay(self, epsilon_decay = 0.00066):
+        self.epsilon = max(self.epsilon - epsilon_decay, 0)
+
     def choose_action(self, observation, timestep, rand_vec):
         state = tf.convert_to_tensor([observation], dtype=tf.float32)
         probabilities = self.adversary_network(state, timestep, rand_vec)
@@ -196,6 +199,7 @@ class DQN_Adversary():
             new_map = np.copy(old_map)
             if(i == 0):
                 new_map[2][y][x] = 1
+            # in case goal position is placed on start, choose random position
             elif(i == 1):
                 if(position in used_positions):
                     remaining_positions = np.arange(self.n_possible_state_values)
@@ -272,8 +276,12 @@ class DQN_Adversary():
                 lose = 0
         return losses, wins/250, rewards, steps_per_episode
 
-    def calculate_regret(self, pro_rewards, ant_rewards):
-      return np.max(ant_rewards) - np.mean(pro_rewards)
+    def calculate_regret(self, pro_rewards, ant_rewards, env):
+        env_reward = np.max(ant_rewards) - np.mean(pro_rewards)
+        env_reward += helper.compute_adversary_block_budget(np.max(ant_rewards), env)
+        return env_reward
+    def calculate_min_max(self, pro_rewards):
+      return -np.mean(pro_rewards)
 
 
     def train(self, regret):

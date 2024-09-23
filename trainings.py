@@ -81,7 +81,7 @@ def run_DQN_PAIRED(size, episodes):
     antagonist_network = networks.Conv_Network(4, map_dims)
     antagonist = agents.DQN_Agent(alpha=alpha, gamma=gamma, epsilon=1, n_actions=4, map_dims=map_dims, memory_size=100000,
                       training_batch_size=64, network=antagonist_network)
-    adversary = adversaries.Reinforce_Adversary(alpha, gamma, adversary_network, map_dims[1], map_dims[0], block_budget_multiplier=0.3)
+    adversary = adversaries.DQN_Adversary(alpha, gamma, adversary_network, map_dims[1], map_dims[0], block_budget_multiplier=0.3)
 
     protagonist_steps = []
     antagonist_steps = []
@@ -128,4 +128,4 @@ if __name__ == '__main__':
     #tf.debugging.set_log_device_placement(True)
     #print(tf.config.list_physical_devices('GPU'))
     with tf.device('/GPU:0'):
-        run_Reinforce_PAIRED((10, 10), 100)
+        run_DQN_PAIRED((10, 10), 100)
