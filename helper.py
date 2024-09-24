@@ -48,11 +48,9 @@ def reward_function(reward, done, new_reward, punishment, step_penalty, distance
     # case for goal
     elif (done and reward > 0): # reached goal
         reward = new_reward
-    if(old_global_distance != None):
-        distance_difference = old_global_distance - distance
     old_global_distance = distance
     #print(f'Distance {distance} and bonus {distance_bonus}')
-    return reward + distance_bonus.item(), distance_bonus.item(), distance_difference
+    return reward + distance_bonus.item(), distance_bonus.item()
 
 def gaussian_potential_function(distance_to_goal, map_size):
     # Increase sigma for a wider Gaussian curve

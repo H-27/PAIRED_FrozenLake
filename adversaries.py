@@ -91,7 +91,7 @@ class Reinforce_Adversary():
                 action, probs = agent.choose_action(old_state)
                 new_state, reward, done, second_flag, info = env.step(action)
                 _, new_state = env_map.map_step(new_state)
-                reward = helper.reward_function(reward, done)
+                reward, distance_bonus = helper.reward_function(reward, done)
                 if (steps > max_steps and not done):
                     done = True
                     reward = -2
@@ -242,7 +242,7 @@ class DQN_Adversary():
                 action, probs = agent.choose_action(old_state)
                 new_state, reward, done, second_flag, info = env.step(action)
                 _, new_state = env_map.map_step(new_state)
-                reward = helper.reward_function(reward, done)
+                reward, distance_bonus = helper.reward_function(reward, done)
                 if (steps > max_steps and not done):
                     done = True
                     reward = -2

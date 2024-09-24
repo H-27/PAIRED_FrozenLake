@@ -11,3 +11,5 @@ optuna
 moviepy
 networkx
 optuna-integration
+plotly
+scikit-learn
