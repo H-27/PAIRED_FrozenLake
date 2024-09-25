@@ -191,8 +191,8 @@ class PPO_Agent:
                 losses.append(loss)
                 actor_losses.append(actor_loss)
                 critic_losses.append(critic_loss)
-            actor_grads = tape.gradient(actor_loss, self.actor.trainable_variables)
-            critic_grads = tape.gradient(critic_loss, self.critic.trainable_variables)
+                actor_grads = tape.gradient(actor_loss, self.actor.trainable_variables)
+                critic_grads = tape.gradient(critic_loss, self.critic.trainable_variables)
             self.actor_optimizer.apply_gradients(zip(actor_grads, self.actor.trainable_variables))
             self.critic_optimizer.apply_gradients(zip(critic_grads, self.critic.trainable_variables))
 

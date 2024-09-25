@@ -176,7 +176,7 @@ if __name__ == '__main__':
 
             study = optuna.create_study(direction="maximize", study_name='DQN-study', storage='sqlite:///DQN_tuning/DQN-study.db', load_if_exists=True)
 
-        study.optimize(DQN_objective, n_trials=2)#, callbacks=[tensorboard_callback])
+        study.optimize(DQN_objective, n_trials=512)#, callbacks=[tensorboard_callback])
         # print duration
         finish_time = datetime.datetime.now()
         elapsed_time = finish_time - start_time
