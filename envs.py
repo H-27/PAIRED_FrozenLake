@@ -1,4 +1,6 @@
 import numpy as np
+import helper
+
 
 class Env_map():
 
@@ -39,18 +41,17 @@ class Env_map():
         char_map = self.deone_hot_map(state_map)
         return char_map, state_map
 
-    def vectorized_map_step(self, observations):
-        char_maps, state_maps = [], []
-        for observation in observations:
-            state_map = self.initial_map.copy()
-            # remove start position
-            state_map[0][state_map[0] == 1] = 0
-            # place in current position
-            state_map[0][calculate_coordinates(observation, self.initial_map.shape[1])] = 1
-            state_maps.append(state_map)
-            char_map = self.deone_hot_map(state_map)
-            char_maps.append(char_map)
-        return char_maps, state_maps
+    def vectorized_step(self, actions, envs):
+        state_maps, rewards, done, truncateds, infos = [], [], [], [], []
+        for i in range(envs):
+            new_state, reward, done, truncated, info = envs[i].step(actions[i])
+            _, new_state = self.map_step(new_state)
+            state_maps.append(new_state)
+            rewards.append(reward)
+            done.append(done)
+            truncateds.append(truncated)
+            infos.append(info)
+        return state_maps, rewards, done, truncateds, infos
 
     def squeeze_map(self):
         squeezed_map = []

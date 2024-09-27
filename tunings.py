@@ -1,3 +1,5 @@
+from matplotlib import pyplot as plt
+
 import networks
 import helper
 import agents
@@ -18,6 +20,7 @@ import plotly
 import sklearn
 
 def DQN_objective(trial):
+    start_time = datetime.datetime.now()
     current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     tune_log_dir = 'DQN_tuning/logs/fit/' + current_time
     train_writer = tf.summary.create_file_writer(tune_log_dir)
@@ -159,7 +162,10 @@ def DQN_objective(trial):
         print(f'Mean reward: {np.mean(scores)}')
         print(f'Losses: {np.mean(losses)}')
         print(f'Result: {result}')
-
+    # print duration
+    finish_time = datetime.datetime.now()
+    elapsed_time = finish_time - start_time
+    print("Execution time:", f"{elapsed_time} seconds.")
     return result
 
 if __name__ == '__main__':
@@ -176,22 +182,26 @@ if __name__ == '__main__':
 
             study = optuna.create_study(direction="maximize", study_name='DQN-study', storage='sqlite:///DQN_tuning/DQN-study.db', load_if_exists=True)
 
-        study.optimize(DQN_objective, n_trials=512)#, callbacks=[tensorboard_callback])
+            #study.optimize(DQN_objective, n_trials=512)#, callbacks=[tensorboard_callback])
         # print duration
         finish_time = datetime.datetime.now()
         elapsed_time = finish_time - start_time
         print("Execution time:", f"{elapsed_time} seconds.")
         # Plot optimization history: Shows the intermediate values of the objective function during optimization.
-        optuna.visualization.plot_optimization_history(study)
+        fig = optuna.visualization.plot_optimization_history(study)
+        fig.show()
         # Plot parameter importance: Shows the relative importance of each parameter in the optimization.
-        optuna.visualization.plot_param_importances(study)
+        fig = optuna.visualization.plot_param_importances(study)
+        fig.show()
         # Plot parallel coordinate plot: Visualize the relationship between multiple parameters and the objective function.
-        optuna.visualization.plot_parallel_coordinate(study,
+        fig = optuna.visualization.plot_parallel_coordinate(study,
                                                       params=["learning_rate", "gamma", "max_step_size_mult", "epsilon",
                                                               "epsilon_decay",
                                                               "scaling_factor", "sigma", "reward", "punishment_per_hole",
                                                               "punishment_per_step", "punishment_for_max_step"])
+        fig.show()
         print(f"Best parameters: {study.best_params}")
+        plt.show()
 
 
 
