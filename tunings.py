@@ -42,14 +42,14 @@ def DQN_objective(trial):
     # reward params
     scaling_factor = trial.suggest_float('scaling_factor', 1e-1, 1, log=True)
     sigma = trial.suggest_float('sigma', 1e-1, 10, log=True)
-    reward = trial.suggest_float('reward', 1, 5)
+    reward_per_goal = trial.suggest_float('reward', 1, 5)
     punishment_per_hole = -trial.suggest_float('punishment_per_hole', 1e-5, 10)
     punishment_per_step = -trial.suggest_float('punishment_per_step', 1e-5, 1, log=True)
     punishment_for_max_step = -trial.suggest_float('punishment_for_max_step', 2, 10)
     params = ["learning_rate", "gamma", "max_step_size_mult", "epsilon", "epsilon_decay",
               "scaling_factor", "sigma", "reward", "punishment_per_hole", "punishment_per_step", "punishment_for_max_step"]
     print(f'learning_rate {alpha}, gamma {gamma}, max_step_size_mult {max_step_size_multiplicator}, epsilon {epsilon}, epsilon_decay {epsilon__decay}, '
-          f'scaling_factor {scaling_factor}, sigma {sigma}, reward {reward}, punishment_per_hole {punishment_per_hole}, '
+          f'scaling_factor {scaling_factor}, sigma {sigma}, reward_per_goal {reward_per_goal}, punishment_per_hole {punishment_per_hole}, '
           f'punishment_per_step {punishment_per_step}, punishment_for_max_step {punishment_for_max_step}')
 
     # create network & agent
@@ -84,13 +84,13 @@ def DQN_objective(trial):
         while not done:
             action, probs = agent.choose_action(old_state)
             new_state, reward, done, second_flag, info = env.step(action)
-            if (done and reward > 0):
+            _, new_state = env_map.map_step(new_state)
+            distance = helper.get_distance(new_state)
+            if (distance == 0):
                 win = True
                 if (first_win == 0):
                     first_win = e
-            _, new_state = env_map.map_step(new_state)
-            distance = helper.get_distance(new_state)
-            reward, distance_bonus = helper.reward_function(reward=reward, done=done, new_reward=reward, punishment=punishment_per_hole, step_penalty = punishment_per_step,
+            reward, distance_bonus = helper.reward_function(reward=reward, done=done, new_reward=reward_per_goal, punishment=punishment_per_hole, step_penalty = punishment_per_step,
                                                      distance=distance,  sigma=sigma, scaling_factor=scaling_factor)
 
             # add punishment to episode when exceeding max_steps
@@ -182,7 +182,7 @@ if __name__ == '__main__':
 
             study = optuna.create_study(direction="maximize", study_name='DQN-study', storage='sqlite:///DQN_tuning/DQN-study.db', load_if_exists=True)
 
-            #study.optimize(DQN_objective, n_trials=512)#, callbacks=[tensorboard_callback])
+            study.optimize(DQN_objective, n_trials=512)#, callbacks=[tensorboard_callback])
         # print duration
         finish_time = datetime.datetime.now()
         elapsed_time = finish_time - start_time

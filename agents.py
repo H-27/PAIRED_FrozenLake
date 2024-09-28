@@ -134,231 +134,104 @@ class DQN_Agent():
     def epsilon_decay(self, epsilon_decay = 0.00066):
         self.epsilon = max(self.epsilon - epsilon_decay, 0)
 
+
 class PPO_Agent:
-    def __init__(self, alpha, gamma, epsilon, n_actions, actor, critic, batch_size):
+    def __init__(self, alpha, gamma, epsilon, n_actions, actor, critic, batch_size, n_envs, map_dims):
         self.alpha = alpha
         self.gamma = gamma
         self.epsilon = epsilon
         self.n_actions = n_actions
-        self.buffer = buffers.PPO_Buffer(batch_size)
+        self.buffer = buffers.Vectorized_PPO_Buffer(batch_size)
         self.actor = actor
         self.critic = critic
         self.actor_optimizer = tf.keras.optimizers.Adam(alpha)
         self.critic_optimizer = tf.keras.optimizers.Adam(alpha)
 
-
-    def choose_action(self, observation):
-        observation = tf.convert_to_tensor(observation)
-        observation = tf.expand_dims(observation,0)
-        probs = self.actor(observation)
+    def choose_action(self, observations, directions, positions):
+        observations_tensor = tf.convert_to_tensor(observations)
+        directions_tensor = tf.convert_to_tensor(directions)
+        positions_tensor = tf.convert_to_tensor(positions)
+        probs = self.actor(observations_tensor, directions_tensor, positions_tensor)
         action_probabilities = tfp.distributions.Categorical(probs=probs)
         action = action_probabilities.sample()
         log_probabilities = action_probabilities.log_prob(action)
 
-        value = self.critic(observation)
+        value = self.critic(observations_tensor, directions_tensor, positions_tensor)
 
-        action = action.numpy()[0]
-        value = value.numpy()[0]
-        log_probability = log_probabilities.numpy()[0]
-
-        return action, value, log_probability, probs
-
-    def train(self):
-        advantages = self.buffer.calculate_advantages(self.gamma)
-        advantages = np.array(advantages)
-        #print(advantages)
-        batches = self.buffer.generate_batches()
-        losses = []
-        actor_losses = []
-        critic_losses = []
-        for batch in batches:
-            states = tf.convert_to_tensor(np.array(self.buffer.states)[batch], dtype=tf.float32)
-            old_probabilities = tf.convert_to_tensor(np.array(self.buffer.probs)[batch], dtype=tf.float32)
-            old_probabilities = tf.expand_dims(old_probabilities, -1)
-            actions = tf.convert_to_tensor(np.array(self.buffer.actions)[batch], dtype=tf.float32)
-            actions = tf.expand_dims(actions, -1)
-            with tf.GradientTape(persistent=True) as tape:
-                #create probabilties and values for saved states
-                probs = self.actor(states)
-                new_probabilities = tfp.distributions.Categorical(probs=probs)
-                new_probabilities = new_probabilities.log_prob(actions)
-                new_values = self.critic(states)
-                #new_values = tf.squeeze(new_values, 1)
-
-                actor_loss, critic_loss = self.calculate_losses(new_probabilities, old_probabilities, new_values, advantages, batch)
-
-                loss = actor_loss + 0.5 * critic_loss
-                losses.append(loss)
-                actor_losses.append(actor_loss)
-                critic_losses.append(critic_loss)
-                actor_grads = tape.gradient(actor_loss, self.actor.trainable_variables)
-                critic_grads = tape.gradient(critic_loss, self.critic.trainable_variables)
-            self.actor_optimizer.apply_gradients(zip(actor_grads, self.actor.trainable_variables))
-            self.critic_optimizer.apply_gradients(zip(critic_grads, self.critic.trainable_variables))
-
-        self.buffer.reset()
-        if(np.isnan(np.mean(losses))):
-            print('No training yet.')
-        return np.mean(losses), np.mean(actor_losses), np.mean(critic_losses)
-
-    def train_vec(self):
-        advantages = self.buffer.calculate_advantages(self.gamma)
-        advantages = np.array(advantages)
-        #print(advantages)
-        batches = self.buffer.generate_batches()
-        losses = []
-        actor_losses = []
-        critic_losses = []
-        for batch in batches:
-            states = tf.convert_to_tensor(np.array(self.buffer.states)[batch], dtype=tf.float32)
-            old_probabilities = tf.convert_to_tensor(np.array(self.buffer.probs)[batch], dtype=tf.float32)
-            old_probabilities = tf.expand_dims(old_probabilities, -1)
-            actions = tf.convert_to_tensor(np.array(self.buffer.actions)[batch], dtype=tf.float32)
-            actions = tf.expand_dims(actions, -1)
-            with tf.GradientTape(persistent=True) as tape:
-                #create probabilties and values for saved states
-                probs = self.actor(states)
-                new_probabilities = tfp.distributions.Categorical(probs=probs)
-                new_probabilities = new_probabilities.log_prob(actions)
-                new_values = self.critic(states)
-                #new_values = tf.squeeze(new_values, 1)
-
-                actor_loss, critic_loss = self.calculate_losses(new_probabilities, old_probabilities, new_values, advantages, batch)
-
-                loss = actor_loss + 0.5 * critic_loss
-                losses.append(loss)
-                actor_losses.append(actor_loss)
-                critic_losses.append(critic_loss)
-            actor_grads = tape.gradient(actor_loss, self.actor.trainable_variables)
-            critic_grads = tape.gradient(critic_loss, self.critic.trainable_variables)
-            self.actor_optimizer.apply_gradients(zip(actor_grads, self.actor.trainable_variables))
-            self.critic_optimizer.apply_gradients(zip(critic_grads, self.critic.trainable_variables))
-
-        self.buffer.reset()
-        if(np.isnan(np.mean(losses))):
-            print('No training yet.')
-        return np.mean(losses), np.mean(actor_losses), np.mean(critic_losses)
-
-    def calculate_losses(self, new_probabilities, old_probabilities, new_values, advantages, batch):
-        # create weighted and clipped probabilities
-        probability_ratio = tf.math.exp(new_probabilities - old_probabilities)
-        weighted_probabilities = advantages[batch] * probability_ratio
-        clipped_probabilities = tf.clip_by_value(probability_ratio, 1 - self.epsilon, 1 + self.epsilon)
-        weighted_clipped_probabilities = clipped_probabilities * probability_ratio
-        batched_advantages = np.expand_dims(advantages[batch], -1)
-        batched_values = np.array(self.buffer.values)[batch]
-        returns = batched_advantages + batched_values
-        returns = tf.convert_to_tensor(returns)
-
-        actor_loss = tf.minimum(weighted_probabilities, weighted_clipped_probabilities)
-        actor_loss = tf.reduce_mean(actor_loss)
-
-        critic_loss = tf.square(returns - new_values) * 0.5
-        # critic_loss = tf.keras.losses.MeanSquaredError(returns, new_values)
-        critic_loss = tf.reduce_mean(critic_loss)
-
-        return actor_loss, critic_loss
-
-    def calculate_vec_losses(self, new_probabilities, old_probabilities, new_values, advantages, batch):
-        # create weighted and clipped probabilities
-        probability_ratio = tf.math.exp(new_probabilities - old_probabilities)
-        weighted_probabilities = advantages[batch] * probability_ratio
-        clipped_probabilities = tf.clip_by_value(probability_ratio, 1 - self.epsilon, 1 + self.epsilon)
-        weighted_clipped_probabilities = clipped_probabilities * probability_ratio
-        batched_advantages = np.expand_dims(advantages[batch], -1)
-        batched_values = np.array(self.buffer.values)[batch]
-        returns = batched_advantages + batched_values
-        returns = tf.convert_to_tensor(returns)
-
-        actor_loss = tf.minimum(weighted_probabilities, weighted_clipped_probabilities)
-        actor_loss = tf.reduce_mean(actor_loss)
-
-        critic_loss = tf.square(returns - new_values) * 0.5
-        # critic_loss = tf.keras.losses.MeanSquaredError(returns, new_values)
-        critic_loss = tf.reduce_mean(critic_loss)
-
-        return actor_loss, critic_loss
-
-class AC_Agent:
-    def __init__(self, alpha, gamma, epsilon, n_actions, actor, critic, batch_size):
-        self.alpha = alpha
-        self.gamma = gamma
-        self.epsilon = epsilon
-        self.n_actions = n_actions
-        self.buffer = buffers.PPO_Buffer(batch_size)
-        self.actor = actor
-        self.critic = critic
-        self.actor_optimizer = tf.keras.optimizers.Adam(alpha)
-        self.critic_optimizer = tf.keras.optimizers.Adam(alpha)
-
-
-    def choose_action(self, observation):
-        observation = tf.convert_to_tensor(observation)
-        observation = tf.expand_dims(observation,0)
-        probs = self.actor(observation)
-        action_probabilities = tfp.distributions.Categorical(probs=probs)
-        action = action_probabilities.sample()
-        log_probabilities = action_probabilities.log_prob(action)
-
-        value = self.critic(observation)
-
-        action = action.numpy()[0]
-        value = value.numpy()[0]
-        log_probability = log_probabilities.numpy()[0]
-
-        return action, value, log_probability
+        action = action.numpy()
+        value = value.numpy()
+        probs = tf.math.log(probs)
+        return action, value, probs
 
     def train(self):
-        advantages = self.buffer.calculate_advantages(self.gamma)
-        advantages = np.array(advantages)
-        batches = self.buffer.generate_batches()
+        # calculate
+
         losses = []
         actor_losses = []
         critic_losses = []
+        counter = 0
+        states, directions, positions, actions, rewards, values, probs, dones, advantages, returns = self.buffer.flatten_buffer()
+        batches = self.buffer.generate_batches(len(states))
         for batch in batches:
-            states = tf.convert_to_tensor(np.array(self.buffer.states)[batch], dtype=tf.float32)
-            old_probabilities = tf.convert_to_tensor(np.array(self.buffer.probs)[batch], dtype=tf.float32)
-            old_probabilities = tf.expand_dims(old_probabilities, -1)
-            actions = tf.convert_to_tensor(np.array(self.buffer.actions)[batch], dtype=tf.float32)
-            actions = tf.expand_dims(actions, -1)
+            # prep values
+            actions, states, directions, positions, probs, advantages, returns = self.prep_buffer_values(batch, actions,
+                                                                                                         states,
+                                                                                                         directions,
+                                                                                                         positions,
+                                                                                                         probs,
+                                                                                                         advantages,
+                                                                                                         returns)
+            old_probabilities = tf.gather(probs, actions, batch_dims=1)
             with tf.GradientTape(persistent=True) as tape:
-                #create probabilties and values for saved states
-                probs = self.actor(states)
-                new_probabilities = tfp.distributions.Categorical(probs=probs)
-                new_probabilities = new_probabilities.log_prob(actions)
-                new_values = self.critic(states)
-                #new_values = tf.squeeze(new_values, 1)
+                # create probabilties and values for saved states
+                probs = self.actor(states, directions, positions)
+                new_probabilities = tf.math.log(probs)
+                new_probabilities = tf.gather(new_probabilities, actions, batch_dims=1)
+                new_values = self.critic(states, directions, positions)
+                # create weighted and clipped probabilities
+                probability_ratio = tf.math.exp(new_probabilities - old_probabilities)
+                weighted_probabilities = advantages * probability_ratio
+                clipped_probabilities = tf.clip_by_value(probability_ratio, 1 - self.epsilon, 1 + self.epsilon)
+                weighted_clipped_probabilities = clipped_probabilities * probability_ratio
 
-                actor_loss, critic_loss = self.calculate_losses(new_probabilities, old_probabilities, new_values, advantages, batch)
+                actor_loss = tf.minimum(weighted_probabilities, weighted_clipped_probabilities)
+                actor_loss = -tf.reduce_mean(actor_loss)
 
-                loss = actor_loss + 0.5 * critic_loss
+                critic_loss = tf.square(returns - new_values)
+                critic_loss = tf.reduce_mean(critic_loss)
+
+                entropy = -tf.reduce_sum(probs * tf.math.log(probs + 1e-10),
+                                         axis=-1)  # Add 1e-10 for numerical stability
+                entropy = tf.reduce_mean(entropy)
+                loss = actor_loss - entropy * 0.01 + critic_loss * 0.5
                 losses.append(loss)
                 actor_losses.append(actor_loss)
                 critic_losses.append(critic_loss)
+
+            states, directions, positions, actions, rewards, values, probs, dones, advantages, returns = self.buffer.flatten_buffer()
+
             actor_grads = tape.gradient(actor_loss, self.actor.trainable_variables)
+            # print(actor_grads)
             critic_grads = tape.gradient(critic_loss, self.critic.trainable_variables)
+            # print(critic_grads)
             self.actor_optimizer.apply_gradients(zip(actor_grads, self.actor.trainable_variables))
             self.critic_optimizer.apply_gradients(zip(critic_grads, self.critic.trainable_variables))
+            counter += 1
 
-        self.buffer.reset()
         return np.mean(losses), np.mean(actor_losses), np.mean(critic_losses)
 
-    def calculate_losses(self, new_probabilities, old_probabilities, new_values, advantages, batch):
-        # create weighted and clipped probabilities
-        probability_ratio = tf.math.exp(new_probabilities - old_probabilities)
-        weighted_probabilities = advantages[batch] * probability_ratio
-        clipped_probabilities = tf.clip_by_value(probability_ratio, 1 - self.epsilon, 1 + self.epsilon)
-        weighted_clipped_probabilities = clipped_probabilities * probability_ratio
-        batched_advantages = np.expand_dims(advantages[batch], -1)
-        batched_values = np.array(self.buffer.values)[batch]
-        returns = batched_advantages + batched_values
-        returns = tf.convert_to_tensor(returns)
+    def prep_buffer_values(self, batch, actions, states, directions, positions, probs, advantages, returns):
+        # prep values
+        actions = tf.convert_to_tensor(np.array(actions.copy())[batch], dtype=tf.int32)
+        actions = tf.expand_dims(actions, -1)
+        states = tf.convert_to_tensor(np.array(states.copy())[batch], dtype=tf.float32)
+        directions = tf.convert_to_tensor(np.array(directions.copy())[batch], dtype=tf.float32)
+        positions = tf.convert_to_tensor(np.array(positions.copy())[batch], dtype=tf.float32)
+        probs = tf.convert_to_tensor(np.array(probs.copy())[batch], dtype=tf.float32)
+        advantages = tf.convert_to_tensor(np.array(advantages).copy()[batch], dtype=tf.float32)
+        advantages = tf.expand_dims(advantages, -1)
+        returns = tf.convert_to_tensor(np.array(returns).copy()[batch], dtype=tf.float32)
+        returns = tf.expand_dims(returns, -1)
 
-        actor_loss = tf.minimum(weighted_probabilities, weighted_clipped_probabilities)
-        actor_loss = tf.reduce_mean(actor_loss)
+        return actions, states, directions, positions, probs, advantages, returns
 
-        critic_loss = tf.square(returns - new_values) * 0.5
-        # critic_loss = tf.keras.losses.MeanSquaredError(returns, new_values)
-        critic_loss = tf.reduce_mean(critic_loss)
-
-        return actor_loss, critic_loss

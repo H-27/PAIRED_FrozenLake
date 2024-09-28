@@ -1,5 +1,6 @@
 import numpy as np
 import helper
+import tensorflow as tf
 
 
 class Env_map():
@@ -42,16 +43,18 @@ class Env_map():
         return char_map, state_map
 
     def vectorized_step(self, actions, envs):
-        state_maps, rewards, done, truncateds, infos = [], [], [], [], []
-        for i in range(envs):
-            new_state, reward, done, truncated, info = envs[i].step(actions[i])
-            _, new_state = self.map_step(new_state)
+        state_maps, positions, rewards, dones, truncateds, infos = [], [], [], [], [], []
+        for i in range(len(envs)):
+            position, reward, done, truncated, info = envs[i].step(actions[i])
+            _, new_state = self.map_step(position)
             state_maps.append(new_state)
+            position = tf.one_hot(position, 4)
+            positions.append(position)
             rewards.append(reward)
-            done.append(done)
+            dones.append(done)
             truncateds.append(truncated)
             infos.append(info)
-        return state_maps, rewards, done, truncateds, infos
+        return state_maps, positions, rewards, dones, truncateds, infos
 
     def squeeze_map(self):
         squeezed_map = []
