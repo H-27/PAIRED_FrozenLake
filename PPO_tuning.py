@@ -2,7 +2,7 @@ import networks
 import helper
 import agents
 import adversaries
-import envs
+import envs as environments
 import buffers
 import numpy as np
 import tensorflow as tf
@@ -21,15 +21,6 @@ def PPO_objective(trial):
     current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     tune_log_dir = 'PPO_tuning/logs/fit/' + current_time
     train_writer = tf.summary.create_file_writer(tune_log_dir)
-    # create map and env
-    adv_map = maps.map_ten_x_ten_test_training.copy()
-    shortest_path, shortest_path_length = helper.get_shortest_possible_length(adv_map)
-    map_dims = adv_map.shape
-    env = gym.make('FrozenLake-v1', desc=adv_map, is_slippery=False)  # , render_mode="human")
-    adv_map[adv_map == 'S'] = 'P'
-    adv_map = envs.Env_map(np.zeros((3,adv_map.shape[0],adv_map.shape[1]))).one_hot_map(adv_map)
-    env_map = envs.Env_map(adv_map)
-
     # general params
     alpha = trial.suggest_float('learning_rate', 1e-5, 1e-1, log=True)
     gamma = trial.suggest_float('gamma', 0.1, 0.9999, log=True)
@@ -37,25 +28,45 @@ def PPO_objective(trial):
     # reward params
     scaling_factor = trial.suggest_float('scaling_factor', 1e-1, 1, log=True)
     sigma = trial.suggest_float('sigma', 1e-1, 10, log=True)
-    reward = trial.suggest_float('reward', 1, 5)
+    reward_per_goal = trial.suggest_float('reward', 1, 10)
     punishment_per_hole = -trial.suggest_float('punishment_per_hole', 1e-5, 10)
     punishment_per_step = -trial.suggest_float('punishment_per_step', 1e-5, 1, log=True)
     punishment_for_max_step = -trial.suggest_float('punishment_for_max_step', 2, 10)
-    num_envs = -trial.suggest_int('num_envs', 2, 10) = -trial.suggest_float('num_envs', 2, 10)
-    n_mini_batches = -trial.suggest_int('n_mini_batches', 2, 20)
-    training_epochs = -trial.suggest_int('training_epochs', 2, 10)
+    num_envs = trial.suggest_int('num_envs', 2, 10)
+    n_mini_batches = trial.suggest_int('n_mini_batches', 2, 20)
+    training_epochs = trial.suggest_int('training_epochs', 2, 10)
+    n_samples = trial.suggest_categorical('n_samples', [16, 32, 64, 128, 256, 512])
     params = ["learning_rate", "gamma", "max_step_size_mult", "epsilon", "epsilon_decay",
               "scaling_factor", "sigma", "reward", "punishment_per_hole", "punishment_per_step", "punishment_for_max_step"]
-    print(f'learning_rate {alpha}, gamma {gamma}, epsilon {epsilon}'
-          f'scaling_factor {scaling_factor}, sigma {sigma}, reward {reward}, punishment_per_hole {punishment_per_hole}, '
-          f'punishment_per_step {punishment_per_step}, punishment_for_max_step {punishment_for_max_step}'
-          f', num_envs {num_envs}, n_mini_batches {n_mini_batches}, training_epochs {training_epochs}')
-
+    print(f'learning_rate {alpha}\n'
+          f'gamma {gamma}\n'
+          f'epsilon {epsilon}\n'
+          f'scaling_factor {scaling_factor}\n'
+          f'sigma {sigma}\n'
+          f'reward {reward_per_goal}\n'
+          f'punishment_per_hole {punishment_per_hole}\n'
+          f'punishment_per_step {punishment_per_step}\n'
+          f'punishment_for_max_step {punishment_for_max_step}\n'
+          f'num_envs {num_envs}\n'
+          f'n_mini_batches {n_mini_batches}\n'
+          f'training_epochs {training_epochs}\n'
+          f'n_samples {n_samples}')
+    # create map and env
+    adv_map = maps.map_ten_x_ten_test_training.copy()
+    shortest_path, shortest_path_length = helper.get_shortest_possible_length(adv_map)
+    map_dims = adv_map.shape
+    envs = [gym.make('FrozenLake-v1', desc=adv_map, is_slippery=False) for _ in range(num_envs)]
+    adv_map[adv_map == 'S'] = 'P'
+    adv_map = environments.Env_map(np.zeros((3, adv_map.shape[0], adv_map.shape[1]))).one_hot_map(adv_map)
+    env_map = environments.Env_map(adv_map)
     # network configurations
-    n_samples = 128
     batch_size = num_envs * n_samples
     mini_batch_size = batch_size // n_mini_batches
-    total_timesteps = 25000
+    total_timesteps = 250000
+    print(f"batch_size: {batch_size}")
+    print(f"mini_batch_size: {mini_batch_size}")
+    print(f"total_timesteps: {total_timesteps}")
+    print(f"n updates: {total_timesteps // (num_envs * n_samples)}")
 
     # Create actor and critic networks
     actor = networks.Actor_Network(4)
@@ -65,6 +76,7 @@ def PPO_objective(trial):
     # training loop
     training_rewards = []
     losses = []
+    score = []
     games_won = 0
     games_done = 0
     mean_losses = []
@@ -94,10 +106,11 @@ def PPO_objective(trial):
             if (wins):
                 for win in range(wins):
                     games_won += 1
-            results = [helper.reward_function(reward=r, done=d, new_reward=reward, punishment=punishment_per_hole, step_penalty=punishment_per_step, distance=dist,
+            results = [helper.reward_function(reward=r, done=d, new_reward=reward_per_goal, punishment=punishment_per_hole, step_penalty=punishment_per_step, distance=dist,
                                        sigma=sigma, scaling_factor=scaling_factor)
                        for r, d, dist in zip(rewards, next_dones, distances)]
             rewards, distance_bonuses = zip(*results)
+            score.append(np.mean(rewards))
             agent.buffer.storeTransition(state=obs, direction=directions, position=positions, action=actions,
                                          reward=rewards,
                                          value=values, probs=probs, done=dones)
@@ -120,7 +133,7 @@ def PPO_objective(trial):
         agent.buffer.values.append(next_value)
         agent.buffer.calculate_advantages(gamma)
         for k in range(training_epochs):
-            loss, actor_loss, critic_loss = agent.train()
+            loss, actor_loss, critic_loss, kld = agent.train()
             losses.append(loss)
         agent.buffer.reset()
 
@@ -132,13 +145,12 @@ def PPO_objective(trial):
             print(f'Games won: {games_won / games_done}%')
             print(f'Score: {np.mean(training_rewards)}')
             print(f'Loss: {np.mean(losses)}')
-            games_won = 0
-            games_done = 0
 
-
-    result = (np.mean(win_ratio)) + (0.25 * np.mean(rewards)) - (0.25 *np.mean(steps_over_optimal))
-
-
+    if(games_won > 0):
+        win_ratio = 10 + (games_won/games_done)
+        result = (np.mean(win_ratio)) + (0.25 * np.mean(score))
+    else:
+        result = -10 + (0.25 * np.mean(score))
     return result
 
 if __name__ == '__main__':
@@ -153,7 +165,7 @@ if __name__ == '__main__':
         study = optuna.create_study(direction="maximize", study_name='PPO-study',
                                     storage='sqlite:///PPO_tuning/PPO-study.db', load_if_exists=True)
 
-        study.optimize(PPO_objective, n_trials=2)  # , callbacks=[tensorboard_callback])
+        study.optimize(PPO_objective, n_trials=128)  # , callbacks=[tensorboard_callback])
     # print duration
     finish_time = datetime.datetime.now()
     elapsed_time = finish_time - start_time

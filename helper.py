@@ -174,7 +174,12 @@ def evaluate_policy(env, env_map, agent):
     video_folder = os.path.join(os.path.join(os.path.expanduser('~')), 'Desktop/Videos/')
     wins = 0
     done = False
+    map_dims = env_map.shape
     for e in range(100):
+        position, _ = env.reset()
+        direction = tf.one_hot(0, 4)
+        _, old_state = env_map.map_step(position)
+        position = tf.one_hot(position, map_dims[0] * map_dims[1])
         # Record video every 10th episode using the 'name_prefix' argument
         if e % 10 == 0:
             env = RecordVideo(env, video_folder=video_folder, name_prefix=e)
@@ -288,14 +293,13 @@ def compute_adversary_block_budget(self, antag_r_max, adv_map, use_shortest_path
     block_budget_reward = (antag_didnt_score * -weighted_budget +
                            (1 - antag_didnt_score) * weighted_budget)
 
-    logging.info(f'Environment block budget reward: %f',
-                 tf.reduce_mean(block_budget_reward).numpy())
-    return block_budget_reward
+
+    return block_budget_reward, tf.reduce_mean(block_budget_reward).numpy()
 
 def calculate_cumulative_discounted_reward(rewards, gamma):
-  cumulative_reward = 0
-  discounted_rewards = []
-  for i in reversed(range(len(rewards))):  # Iterate in reverse
-      cumulative_reward = rewards[i] + (gamma ** i) * cumulative_reward
-      discounted_rewards.insert(0, cumulative_reward)
-  return discounted_rewards
+    g = 0
+    discount = 1
+    for t in reversed(range(len(rewards))):
+        g = rewards[t] + discount * g
+        discount = discount * gamma
+    return g

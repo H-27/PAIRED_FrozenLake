@@ -35,28 +35,32 @@ def DQN_objective(trial):
 
     # general params
     alpha = trial.suggest_float('learning_rate', 1e-5, 1e-1, log=True)
-    gamma = trial.suggest_float('gamma', 0.1, 0.9999, log=True)
-    max_step_size_multiplicator = trial.suggest_float('max_step_size_mult', 1, 10)
+    gamma = trial.suggest_float('gamma', 0.5, 0.9999, log=True)
+    max_step_size_multiplicator = trial.suggest_float('max_step_size_mult', 1, 5)
     epsilon = trial.suggest_float('epsilon', 0.1, 0.9999 , log=True)
     epsilon__decay = trial.suggest_float('epsilon_decay', 1e-5, 1e-1, log=True)
     # reward params
-    scaling_factor = trial.suggest_float('scaling_factor', 1e-1, 1, log=True)
-    sigma = trial.suggest_float('sigma', 1e-1, 10, log=True)
+    scaling_factor = trial.suggest_float('scaling_factor', 0.5, 1, log=True)
+    sigma = trial.suggest_float('sigma', 5, 10, log=True)
     reward_per_goal = trial.suggest_float('reward', 1, 5)
-    punishment_per_hole = -trial.suggest_float('punishment_per_hole', 1e-5, 10)
-    punishment_per_step = -trial.suggest_float('punishment_per_step', 1e-5, 1, log=True)
-    punishment_for_max_step = -trial.suggest_float('punishment_for_max_step', 2, 10)
+    punishment_per_hole = -trial.suggest_float('punishment_per_hole', 4, 9)
+    punishment_per_step = -trial.suggest_float('punishment_per_step', 1e-5, 0.1, log=True)
+    punishment_for_max_step = -trial.suggest_float('punishment_for_max_step', 9, 10)
+    use_direction = trial.suggest_categorical("use_direction", [True, False])
+    use_position = trial.suggest_categorical("use_position", [True, False])
     params = ["learning_rate", "gamma", "max_step_size_mult", "epsilon", "epsilon_decay",
               "scaling_factor", "sigma", "reward", "punishment_per_hole", "punishment_per_step", "punishment_for_max_step"]
-    print(f'learning_rate {alpha}, gamma {gamma}, max_step_size_mult {max_step_size_multiplicator}, epsilon {epsilon}, epsilon_decay {epsilon__decay}, '
-          f'scaling_factor {scaling_factor}, sigma {sigma}, reward_per_goal {reward_per_goal}, punishment_per_hole {punishment_per_hole}, '
-          f'punishment_per_step {punishment_per_step}, punishment_for_max_step {punishment_for_max_step}')
+    print(f'learning_rate {alpha}\n, gamma {gamma}\n, max_step_size_mult {max_step_size_multiplicator}\n, epsilon {epsilon}\n, epsilon_decay {epsilon__decay}\n, '
+          f'scaling_factor {scaling_factor}\n, sigma {sigma}\n, reward_per_goal {reward_per_goal}\n, punishment_per_hole {punishment_per_hole}\n, '
+          f'punishment_per_step {punishment_per_step}\n, punishment_for_max_step {punishment_for_max_step}\n use_direction {use_direction}\n, use_position {use_position}')
 
     # create network & agent
     # network
-    network = networks.Conv_Network(n_actions = 4, map_dims=map_dims)
+    network = networks.Actor_Network(n_actions = 4)
     # agent
-    agent = agents.DQN_Agent(alpha=alpha, gamma=gamma, epsilon=epsilon, n_actions=4, map_dims=map_dims, memory_size=100000, training_batch_size=64, network=network)
+    agent = agents.DQN_Agent(alpha=alpha, gamma=gamma, epsilon=epsilon, n_actions=4,
+                             map_dims=map_dims, memory_size=100000, training_batch_size=64, network=network,
+                             use_direction=use_direction, use_position=use_position)
 
     # training loop
     episodes = 5000 # for small map, just as a test start
@@ -75,16 +79,21 @@ def DQN_objective(trial):
     wins_in_a_row = 0
     win_ratio = []
     # training loop
-    old_state, _ = env.reset()
-    _, old_state = env_map.map_step(old_state)
+    position, _ = env.reset()
+    direction = tf.one_hot(0, 4)
+    _, old_state = env_map.map_step(position)
+    position = tf.one_hot(position, map_dims[0] * map_dims[1])
+
     for e in range(episodes):
         win = False
         steps = 0
         done = False
         while not done:
-            action, probs = agent.choose_action(old_state)
-            new_state, reward, done, second_flag, info = env.step(action)
-            _, new_state = env_map.map_step(new_state)
+            action, probs = agent.choose_action(old_state, direction, position)
+            direction = tf.one_hot(action, 4)
+            position, reward, done, second_flag, info = env.step(action)
+            _, new_state = env_map.map_step(position)
+            position = tf.one_hot(position, (map_dims[0] * map_dims[1]))
             distance = helper.get_distance(new_state)
             if (distance == 0):
                 win = True
@@ -99,8 +108,10 @@ def DQN_objective(trial):
                 reward += punishment_for_max_step
             episode_reward += reward
 
-            agent.buffer.storeTransition(old_state=old_state, new_state=new_state, action=action, reward=reward, done=done)
+            agent.buffer.storeTransition(old_state=old_state, new_state=new_state, direction=direction,
+                                         position=position, action=action, reward=reward, done=done)
             old_state = new_state
+
             last_action = action
             episode_steps += 1
             steps += 1
@@ -115,7 +126,7 @@ def DQN_objective(trial):
 
         # save to tb
         with train_writer.as_default():
-            tf.summary.scalar('Reward', reward, step=e)
+            tf.summary.scalar('Reward', episode_reward, step=e)
             tf.summary.scalar('Loss', loss, step=e)
             tf.summary.scalar('Epsilon', agent.epsilon, step=e)
 
@@ -129,7 +140,6 @@ def DQN_objective(trial):
         if(win == True):
             steps_over_optimal.append(episode_steps-shortest_path_length)
             wins += 1
-            episode_steps = 0
         episode_steps = 0
         episode_reward = 0
 
@@ -180,9 +190,9 @@ if __name__ == '__main__':
             tensorboard_callback = TensorBoardCallback(log_dir, metric_name="result")
             finish_training = False
 
-            study = optuna.create_study(direction="maximize", study_name='DQN-study', storage='sqlite:///DQN_tuning/DQN-study.db', load_if_exists=True)
+            study = optuna.create_study(direction="maximize", study_name='DQN-study', storage='sqlite:///DQN_tuning/Direction-DQN-study.db', load_if_exists=True)
 
-            study.optimize(DQN_objective, n_trials=512)#, callbacks=[tensorboard_callback])
+            study.optimize(DQN_objective, n_trials=128)#, callbacks=[tensorboard_callback])
         # print duration
         finish_time = datetime.datetime.now()
         elapsed_time = finish_time - start_time

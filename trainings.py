@@ -74,11 +74,11 @@ def run_DQN_PAIRED(size, episodes):
     alpha = 0.0001
     gamma = 0.995
     adversary_network = networks.Adversary_Network(map_dims[1]* map_dims[0], map_dims)
-    protagonist_network = networks.Conv_Network(4, map_dims)
+    protagonist_network = networks.Actor_Network(4)
     protagonist = agents.DQN_Agent(alpha=alpha, gamma=gamma, epsilon=1, n_actions=4, map_dims=map_dims, memory_size=100000,
                       training_batch_size=64, network=protagonist_network)
 
-    antagonist_network = networks.Conv_Network(4, map_dims)
+    antagonist_network = networks.Actor_Network(4)
     antagonist = agents.DQN_Agent(alpha=alpha, gamma=gamma, epsilon=1, n_actions=4, map_dims=map_dims, memory_size=100000,
                       training_batch_size=64, network=antagonist_network)
     adversary = adversaries.DQN_Adversary(alpha, gamma, adversary_network, map_dims[1], map_dims[0], block_budget_multiplier=0.3)
@@ -123,6 +123,9 @@ def run_DQN_PAIRED(size, episodes):
         print(f'np.mean(pro_steps): {np.mean(pro_steps)}')
         print(f'np.mean(ant_steps): {np.mean(ant_steps)}')
         print(f'np.mean(losses): {np.mean(losses)}')
+
+def run_PPO_PAIRED(size, episodes):
+    pass
 
 if __name__ == '__main__':
     #tf.debugging.set_log_device_placement(True)

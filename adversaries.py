@@ -219,8 +219,10 @@ class DQN_Adversary():
 
         return new_map
 
-    def collect_trajectories(self, adv_map, agent, episodes, max_steps):
+    def collect_trajectories(self, adv_map, agent, episodes):
         env_map = Env_map(adv_map)
+        map_dims = adv_map.shape
+        max_steps = map_dims[0] * map_dims[1]
         char_map = env_map.deone_hot_map_with_start(adv_map)
         squeezed_map = helper.squeeze_map(char_map)
         env = gym.make('FrozenLake-v1', desc=squeezed_map, map_name="4x4", is_slippery=False, render_mode="human")
@@ -228,32 +230,51 @@ class DQN_Adversary():
         rewards = []
         losses = []
         steps_per_episode = []
+        episode_reward = []
         # training loop
-        old_state, _ = env.reset()
-        _, old_state = env_map.map_step(old_state)
+        position, _ = env.reset()
+        direction = tf.one_hot(0, 4)
+        _, old_state = env_map.map_step(position)
+        position = tf.one_hot(position, map_dims[0] * map_dims[1])
 
         episode_steps = 0
         wins = 0
         lose = 0
         for e in range(episodes):
-            done = False
+            win = False
             steps = 0
+            done = False
             while not done:
-                action, probs = agent.choose_action(old_state)
-                new_state, reward, done, second_flag, info = env.step(action)
-                _, new_state = env_map.map_step(new_state)
-                reward, distance_bonus = helper.reward_function(reward, done)
+                action, probs = agent.choose_action(old_state, direction, position)
+                position, reward, done, second_flag, info = env.step(action)
+                _, new_state = env_map.map_step(position)
+                position = tf.one_hot(position, (map_dims[0] * map_dims[1]))
+                distance = helper.get_distance(new_state)
+                if (distance == 0):
+                    win = True
+                    if (first_win == 0):
+                        first_win = e
+                reward, distance_bonus = helper.reward_function(reward=reward, done=done, new_reward=2.7,
+                                                                punishment=5,
+                                                                step_penalty=-0.0001,
+                                                                distance=distance, sigma=4,
+                                                                scaling_factor=1)
+
+                # add punishment to episode when exceeding max_steps
                 if (steps > max_steps and not done):
                     done = True
-                    reward = -2
-                    episode_steps = 0
+                    reward += -10
+                episode_reward += reward
 
-                agent.buffer.storeTransition(state=old_state, action=action, reward=reward, value=0, probs=probs, done=done)
+                agent.buffer.storeTransition(old_state=old_state, new_state=new_state, direction=direction,
+                                             position=position, action=action, reward=reward, done=done)
                 old_state = new_state
+                direction = tf.one_hot(action, 4)
+                last_action = action
                 episode_steps += 1
                 steps += 1
-
-            loss = agent.train()
+            # loss = agent.train()
+            loss = agent.train_on_stack()
             losses.append(loss)
 
             old_state, _ = env.reset()
@@ -276,7 +297,7 @@ class DQN_Adversary():
                 lose = 0
         return losses, wins/250, rewards, steps_per_episode
 
-    def calculate_regret(self, pro_rewards, ant_rewards, env):
+    def calculate_regret(self, pro_rewards, ant_rewards, env, ):
         env_reward = np.max(ant_rewards) - np.mean(pro_rewards)
         env_reward += helper.compute_adversary_block_budget(np.max(ant_rewards), env)
         return env_reward

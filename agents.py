@@ -4,18 +4,22 @@ import tensorflow_probability as tfp
 import numpy as np
 
 class Reinforce_Agent:
-    def __init__(self, alpha, gamma, n_actions, network):
+    def __init__(self, alpha, gamma, n_actions, network, use_direction=False, use_position=False):
         self.alpha = alpha
         self.gamma = gamma
         self.n_actions = n_actions
         self.buffer = buffers.Buffer()
         self.network = network
         self.optimizer = tf.keras.optimizers.Adam(alpha)
+        self.use_direction = use_direction
+        self.use_position = use_position
 
-    def choose_action(self, observation):
+    def choose_action(self, observation, direction, position):
         state = tf.convert_to_tensor([observation], dtype=tf.float32)
+        direction = tf.convert_to_tensor([direction], dtype=tf.float32)
+        position = tf.convert_to_tensor([position], dtype=tf.float32)
         #state = np.expand_dims(state, -1)
-        probabilities = self.network(state)
+        probabilities = self.network(state, direction, position)
         action_probabilities = tfp.distributions.Categorical(probs = probabilities)
         action = action_probabilities.sample()
         return action.numpy()[0], probabilities
@@ -25,15 +29,17 @@ class Reinforce_Agent:
         g = self.buffer.calculate_returns(self.gamma)
 
         with tf.GradientTape() as tape:
-          loss = 0
-          for i, (g,state) in enumerate(zip(g, self.buffer.states)):
-            state = tf.convert_to_tensor([state], dtype=tf.float32)
-            #state = tf.expand_dims(state,-1)
-            probs = self.network(state)
-            action_probs = tfp.distributions.Categorical(probs = probs)
-            log_prob = action_probs.log_prob(actions[i])
-            loss += -g * tf.squeeze(log_prob)
-          gradient = tape.gradient(loss, self.network.trainable_variables)
+            loss = 0
+            for i, (g,state, direction, position) in enumerate(zip(g, self.buffer.states, self.buffer.directions, self.buffer.positions)):
+                state = tf.convert_to_tensor([state], dtype=tf.float32)
+                direction = tf.convert_to_tensor([direction], dtype=tf.float32)
+                position = tf.convert_to_tensor([position], dtype=tf.float32)
+                #state = tf.expand_dims(state,-1)
+                probs = self.network(state, direction, position)
+                action_probs = tfp.distributions.Categorical(probs = probs)
+                log_prob = action_probs.log_prob(actions[i])
+                loss += -g * tf.squeeze(log_prob)
+            gradient = tape.gradient(loss, self.network.trainable_variables)
         self.optimizer.apply_gradients(zip(gradient, self.network.trainable_variables))
 
         self.buffer.reset()
@@ -43,29 +49,34 @@ class Reinforce_Agent:
 
 class DQN_Agent():
 
-    def __init__(self, alpha, gamma, epsilon, n_actions, map_dims, memory_size, training_batch_size, network):
+    def __init__(self, alpha, gamma, epsilon, n_actions, map_dims, memory_size, training_batch_size, network, use_direction, use_position):
         self.alpha = alpha
         self.gamma = gamma
         self.epsilon = epsilon
         self.n_actions = n_actions
         self.batch_size = training_batch_size
-        self.buffer = buffers.DQN_Buffer(memory_size, map_dims[0], map_dims[1])
+        self.buffer = buffers.Direction_DQN_Buffer(memory_size, map_dims[0], map_dims[1])
         self.network = network
         self.optimizer = tf.keras.optimizers.Adam(alpha)
         self.loss_function = tf.keras.losses.MeanSquaredError()
+        self.use_direction = use_direction
+        self.use_position = use_position
 
-    def choose_action(self, observation):
+    def choose_action(self, observation, direction, position):
         actions = range(self.n_actions)
-        log_probabilities = np.zeros((1,4))[0]
-        probabilities = np.zeros((1,4))
-        action_probabilities = np.zeros((1,4))[0]
+
         rand = np.random.random()
         if rand < self.epsilon:
+            log_probabilities = np.zeros((1, 4))[0]
+            probabilities = np.zeros((1, 4))
+            action_probabilities = np.zeros((1, 4))[0]
             action = np.random.choice(actions)
         else:
             observation = tf.convert_to_tensor(observation, dtype=tf.float32)
             observation = tf.expand_dims(observation,0)
-            probabilities = self.network(observation)
+            direction = tf.expand_dims(direction, 0)
+            position = tf.expand_dims(position, 0)
+            probabilities = self.network(observation, direction, position, self.use_direction, self.use_position)
             action_probabilities = tfp.distributions.Categorical(probs=probabilities)
             action = action_probabilities.sample()
             log_probabilities = action_probabilities.log_prob(action)
@@ -73,54 +84,21 @@ class DQN_Agent():
             action = action.numpy()[0]
         return action, probabilities
 
-    def train(self):
-        if (self.buffer.memory_counter < self.batch_size):
-            return 0
-        losses = []
-        old_states, new_states, actions, rewards, dones = self.buffer.create_batch(self.batch_size)
-
-        with tf.GradientTape() as tape:
-
-            for batch_index in range(len(actions)):
-
-                old_state = tf.convert_to_tensor(old_states[batch_index], dtype=tf.float32)
-                old_state = tf.expand_dims(old_state,0)
-                new_state = tf.convert_to_tensor(new_states[batch_index], dtype=tf.float32)
-                new_state = tf.expand_dims(new_state,0)
-                action = tf.convert_to_tensor(actions[batch_index], dtype=tf.float32)
-                reward = tf.convert_to_tensor(rewards[batch_index], dtype=tf.float32)
-                done = tf.convert_to_tensor(dones[batch_index], dtype=tf.float32)
-
-                old_q_probs = self.network(old_state)
-                old_q_value = old_q_probs.numpy()[0][int(action.numpy())]
-
-                next_state_probs = self.network(new_state, training=False)
-                next_state_value = tf.reduce_max(next_state_probs)
-
-                q_target = reward + (self.gamma * next_state_value) * (1 - done)
-
-                loss = tf.square(q_target - old_q_value) * 0.5
-                loss = tf.reduce_mean(loss)
-                #loss = self.loss_function(q_target, old_q_value)
-
-                losses.append(loss)
-
-            grads = tape.gradient(losses, self.network.trainable_variables)
-        self.optimizer.apply_gradients(zip(grads, self.network.trainable_variables))
-        return np.mean(losses)
-
     def train_on_stack(self):
         if (self.buffer.memory_counter < self.batch_size):
             return 0
-        old_states, new_states, actions, rewards, dones = self.buffer.create_batch(self.batch_size)
+        old_states, new_states, directions, positions, actions, rewards, dones = self.buffer.create_batch(self.batch_size)
         with tf.GradientTape() as tape:
-
-            target_q = self.network(tf.convert_to_tensor(new_states, dtype=tf.float32))
+            directions = tf.convert_to_tensor(directions, dtype=tf.float32)
+            positions = tf.convert_to_tensor(positions, dtype=tf.float32)
+            target_q = self.network(tf.convert_to_tensor(new_states, dtype=tf.float32), directions, positions,
+                                    self.use_direction, self.use_position)
             chosen_action = tf.argmax(target_q, axis=1) # correct axis?
             target_value = tf.reduce_sum(tf.one_hot(chosen_action, self.n_actions) * target_q, axis=1)
             target_value = (1-dones) * self.gamma * target_value + rewards
 
-            main_q = self.network(tf.convert_to_tensor(old_states, dtype=tf.float32))
+            main_q = self.network(tf.convert_to_tensor(old_states, dtype=tf.float32), directions, positions,
+                                  self.use_direction, self.use_position)
             main_value = tf.reduce_sum(tf.one_hot(actions, self.n_actions) * main_q, axis=1)
 
             loss = tf.square(main_value - target_value) * 0.5
@@ -136,7 +114,7 @@ class DQN_Agent():
 
 
 class PPO_Agent:
-    def __init__(self, alpha, gamma, epsilon, n_actions, actor, critic, batch_size, n_envs, map_dims):
+    def __init__(self, alpha, gamma, epsilon, n_actions, actor, critic, batch_size, use_direction, use_position):
         self.alpha = alpha
         self.gamma = gamma
         self.epsilon = epsilon
@@ -146,6 +124,9 @@ class PPO_Agent:
         self.critic = critic
         self.actor_optimizer = tf.keras.optimizers.Adam(alpha)
         self.critic_optimizer = tf.keras.optimizers.Adam(alpha)
+        self.use_direction = use_direction
+        self.use_position = use_position
+
 
     def choose_action(self, observations, directions, positions):
         observations_tensor = tf.convert_to_tensor(observations)
@@ -169,6 +150,7 @@ class PPO_Agent:
         losses = []
         actor_losses = []
         critic_losses = []
+        kls = []
         counter = 0
         states, directions, positions, actions, rewards, values, probs, dones, advantages, returns = self.buffer.flatten_buffer()
         batches = self.buffer.generate_batches(len(states))
@@ -192,7 +174,7 @@ class PPO_Agent:
                 probability_ratio = tf.math.exp(new_probabilities - old_probabilities)
                 weighted_probabilities = advantages * probability_ratio
                 clipped_probabilities = tf.clip_by_value(probability_ratio, 1 - self.epsilon, 1 + self.epsilon)
-                weighted_clipped_probabilities = clipped_probabilities * probability_ratio
+                weighted_clipped_probabilities =  advantages * clipped_probabilities
 
                 actor_loss = tf.minimum(weighted_probabilities, weighted_clipped_probabilities)
                 actor_loss = -tf.reduce_mean(actor_loss)
@@ -200,6 +182,8 @@ class PPO_Agent:
                 critic_loss = tf.square(returns - new_values)
                 critic_loss = tf.reduce_mean(critic_loss)
 
+                kl_divergence = ((probability_ratio - 1.0) - tf.math.log(probability_ratio)).numpy().mean()
+                kls.append(kl_divergence)
                 entropy = -tf.reduce_sum(probs * tf.math.log(probs + 1e-10),
                                          axis=-1)  # Add 1e-10 for numerical stability
                 entropy = tf.reduce_mean(entropy)
@@ -218,7 +202,8 @@ class PPO_Agent:
             self.critic_optimizer.apply_gradients(zip(critic_grads, self.critic.trainable_variables))
             counter += 1
 
-        return np.mean(losses), np.mean(actor_losses), np.mean(critic_losses)
+        return np.mean(losses), np.mean(actor_losses), np.mean(critic_losses), np.mean(kls)
+
 
     def prep_buffer_values(self, batch, actions, states, directions, positions, probs, advantages, returns):
         # prep values
