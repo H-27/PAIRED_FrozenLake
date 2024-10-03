@@ -300,6 +300,7 @@ def calculate_cumulative_discounted_reward(rewards, gamma):
     g = 0
     discount = 1
     for t in reversed(range(len(rewards))):
-        g = rewards[t] + discount * g
-        discount = discount * gamma
+        g += discount * rewards[t]
+        discount *= gamma
     return g
+

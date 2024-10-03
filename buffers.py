@@ -48,7 +48,6 @@ class DQN_Buffer():
     def __init__(self, memory_size, x, y):
         self.memory_size = memory_size
         self.memory_counter = 0
-
         self.states = np.zeros((self.memory_size, 3, x, y), dtype=np.float32)
         self.new_states = np.zeros((self.memory_size, 3, x, y), dtype=np.float32)
         self.actions = np.zeros(self.memory_size, dtype=np.float32)

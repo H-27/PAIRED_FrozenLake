@@ -7,10 +7,12 @@ class Env_map():
 
     def __init__(self, adversary_map):
         self.initial_map = adversary_map
+        self.shape = (3,adversary_map[1], adversary_map[2])
 
     def one_hot_map(self, char_map):
         new_map = np.zeros(self.initial_map.shape, dtype=np.float32)
         new_map[0][char_map == 'P'] = 1
+        new_map[0][char_map == 'S'] = 1
         new_map[1][char_map == 'H'] = 1
         new_map[2][char_map == 'G'] = 1
         for i in range(self.initial_map.shape[0]):

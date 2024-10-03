@@ -49,10 +49,11 @@ class Reinforce_Agent:
 
 class DQN_Agent():
 
-    def __init__(self, alpha, gamma, epsilon, n_actions, map_dims, memory_size, training_batch_size, network, use_direction, use_position):
+    def __init__(self, alpha, gamma, epsilon, epsilon_decay, n_actions, map_dims, memory_size, training_batch_size, network, use_direction, use_position):
         self.alpha = alpha
         self.gamma = gamma
         self.epsilon = epsilon
+        self.epsilon_decay_value = epsilon_decay
         self.n_actions = n_actions
         self.batch_size = training_batch_size
         self.buffer = buffers.Direction_DQN_Buffer(memory_size, map_dims[0], map_dims[1])
@@ -63,14 +64,14 @@ class DQN_Agent():
         self.use_position = use_position
 
     def choose_action(self, observation, direction, position):
-        actions = range(self.n_actions)
+        action_range = range(self.n_actions)
 
         rand = np.random.random()
         if rand < self.epsilon:
             log_probabilities = np.zeros((1, 4))[0]
             probabilities = np.zeros((1, 4))
             action_probabilities = np.zeros((1, 4))[0]
-            action = np.random.choice(actions)
+            action = np.random.choice(action_range)
         else:
             observation = tf.convert_to_tensor(observation, dtype=tf.float32)
             observation = tf.expand_dims(observation,0)
@@ -109,8 +110,8 @@ class DQN_Agent():
         self.optimizer.apply_gradients(zip(grads, self.network.trainable_variables))
         return loss.numpy()
 
-    def epsilon_decay(self, epsilon_decay = 0.00066):
-        self.epsilon = max(self.epsilon - epsilon_decay, 0)
+    def epsilon_decay(self):
+        self.epsilon = max(self.epsilon - self.epsilon_decay_value, 0)
 
 
 class PPO_Agent:
