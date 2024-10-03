@@ -330,7 +330,7 @@ class DQN_Adversary():
                 print(f'Episode: {e}')
                 print(f'Mean last hundred steps: {np.mean(steps_per_episode[-100:])}')
                 print(f'Epsilon: {agent.epsilon}')
-                print(f'Games won: {wins}%')
+                print(f'Games won: {wins/5}%')
                 print(f'Score: {np.mean(cumulative_discounted_rewards)}')
                 print(f'Loss: {np.mean(losses)}')
                 wins = 0

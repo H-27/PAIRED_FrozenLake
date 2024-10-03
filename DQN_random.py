@@ -54,7 +54,7 @@ def run_DQN_random(episodes, map_dims, continue_training, continue_on_episode = 
 
     # remaining values
     max_steps = (map_dims[0]*map_dims[1]) * 5
-    agent_max_episodes = 7500
+    agent_max_episodes = 7501
 
     # train writer
     current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -78,8 +78,10 @@ def run_DQN_random(episodes, map_dims, continue_training, continue_on_episode = 
         num_blocks = helper.get_num_blocks(adv_map)
         env_map = envs.Env_map(np.zeros((3, map_dims[0], map_dims[0]))).one_hot_map(adv_map)
         maps.append(adv_map)
-
+        print('training protagonist')
         pro_losses, pro_win_ratio, pro_shaped_episode_reward, pro_episode_reward, pro_steps_per_episode, pro_episodes_until_convergence = adversary.collect_trajectories(env_map, protagonist, agent_max_episodes)
+        # training antagonist
+        print('training antagonist')
         ant_losses, ant_win_ratio, ant_shaped_episode_reward, ant_episode_reward, ant_steps_per_episode, ant_episodes_until_convergence = adversary.collect_trajectories(env_map, antagonist, agent_max_episodes)
 
         # save agents after training
@@ -121,11 +123,11 @@ def run_DQN_random(episodes, map_dims, continue_training, continue_on_episode = 
     print('tensorboard --logdir=' + train_log_dir)
 
 def load_episode():
-    with open("episode_value.txt", "r") as f:
+    with open("DQN_random-episode_value.txt", "r") as f:
         value = int(f.read())
     return value
 def save_episode(value):
-    with open("episode_value.txt", "w") as f:
+    with open("DQN_random-episode_value.txt", "w") as f:
         f.write(str(value))
 
 def create_map(map_dims):
@@ -163,18 +165,19 @@ def create_map(map_dims):
 def save_tensorboard_name():
     current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     train_log_dir = 'DQN_random/logs/fit/' + current_time
-    with open("save_tensorboard_name.txt", "w") as f:
+    with open("save_DQN_random-tensorboard_name.txt", "w") as f:
         f.write(str(train_log_dir))
 
 if __name__ == '__main__':
     episodes= 1
     map_dims = (10,10)
-    continue_training = True
+    continue_training = False
     print()
     if continue_training:
         continue_on_episode = load_episode()
     else:
         continue_on_episode = 0
-    run_DQN_random(episodes, map_dims, continue_training, continue_on_episode)
+    with tf.device('/GPU:0'):
+        run_DQN_random(episodes, map_dims, continue_training, continue_on_episode)
 
 

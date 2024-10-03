@@ -28,7 +28,7 @@ def run_DQN_minimax(episodes, map_dims, continue_training, continue_on_episode =
     agent_alpha = 0.001
     agent_gamma = 0.7
     agent_epsilon = 0.3339
-    agent_epsilon_decay = 0.0007574974429757832
+    agent_epsilon_decay = 0.0006678
     agent_memory_size = 100000
     agent_training_batch_size = 64
     protagonist = agents.DQN_Agent(alpha=agent_alpha, gamma=agent_gamma, epsilon=agent_epsilon, epsilon_decay=agent_epsilon_decay,
@@ -54,7 +54,7 @@ def run_DQN_minimax(episodes, map_dims, continue_training, continue_on_episode =
 
     # remaining values
     max_steps = (map_dims[0]*map_dims[1]) * 5
-    agent_max_episodes = 15000
+    agent_max_episodes = 7501
 
     # train writer
     current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -78,15 +78,18 @@ def run_DQN_minimax(episodes, map_dims, continue_training, continue_on_episode =
         num_blocks = helper.get_num_blocks(adv_map)
         env_map = envs.Env_map(np.zeros((3, map_dims[0], map_dims[0]))).one_hot_map(adv_map)
         maps.append(adv_map)
-
+        #training protagonist
+        print('training protagonist')
         pro_losses, pro_win_ratio, pro_shaped_episode_reward, pro_episode_reward, pro_steps_per_episode, pro_episodes_until_convergence = adversary.collect_trajectories(env_map, protagonist, agent_max_episodes)
+        #training antagonist
+        print('training antagonist')
         ant_losses, ant_win_ratio, ant_shaped_episode_reward, ant_episode_reward, ant_steps_per_episode, ant_episodes_until_convergence = adversary.collect_trajectories(env_map, antagonist, agent_max_episodes)
 
         # save agents after training
         helper.save_model(protagonist_network, 'DQN_minimax/protagonist')
         helper.save_model(antagonist_network, 'DQN_minimax/antagonist')
 
-        regret = -np.mean(pro_episode_reward)
+        regret =  - np.mean(pro_episode_reward)
 
         protagonist_win_ratio.append(pro_win_ratio)
         antagonist_win_ratio.append(ant_win_ratio)
@@ -98,12 +101,15 @@ def run_DQN_minimax(episodes, map_dims, continue_training, continue_on_episode =
             tf.summary.scalar('pro_losses', np.mean(pro_losses), step=e)
             tf.summary.scalar('pro_win_ratio', pro_win_ratio, step=e)
             tf.summary.scalar('pro_rewards', np.mean(pro_episode_reward), step=e)
+            tf.summary.scalar('pro_shaped_rewards', np.mean(pro_shaped_episode_reward), step=e)
             tf.summary.scalar('pro_steps', np.mean(protagonist_steps), step=e)
             tf.summary.scalar('ant_losses', np.mean(ant_losses), step=e)
             tf.summary.scalar('ant_win_ratio', ant_win_ratio, step=e)
             tf.summary.scalar('ant_rewards', np.mean(ant_episode_reward), step=e)
+            tf.summary.scalar('ant_shaped_episode_reward', np.mean(ant_shaped_episode_reward), step=e)
             tf.summary.scalar('ant_steps', np.mean(antagonist_steps), step=e)
             tf.summary.scalar('regret', regret, step=e)
+
             if shortest_path == None:
                 solvable = False
             else:
@@ -124,24 +130,34 @@ def run_DQN_minimax(episodes, map_dims, continue_training, continue_on_episode =
         helper.save_model(adversary_network, 'DQN_minimax/adversary')
         print(f'Episode: {e}')
         save_episode(e)
+        save_tensorboard_name()
         print(f'regret: {regret}')
     print('tensorboard --logdir=' + train_log_dir)
 
 def load_episode():
-    with open("episode_value.txt", "r") as f:
-        value = int(f.read())
+    with open("DQN_minimax-episode_value.txt", "r") as f:
+        string = f.read()
+        value = int(string)
     return value
 def save_episode(value):
-    with open("episode_value.txt", "w") as f:
+    with open("DQN_minimax-episode_value.txt", "w") as f:
         f.write(str(value))
+
+def save_tensorboard_name():
+    current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    train_log_dir = 'DQN_minimax/logs/fit/' + current_time
+    with open("save_DQN_minimax-tensorboard_name.txt", "w") as f:
+        f.write(str(train_log_dir))
+
 if __name__ == '__main__':
-    episodes= 1
+    episodes= 500000
     map_dims = (10,10)
     continue_training = False
     if continue_training:
         continue_on_episode = load_episode()
     else:
         continue_on_episode = 0
-    run_DQN_minimax(episodes, map_dims, continue_training, continue_on_episode)
+    with tf.device('/GPU:0'):
+        run_DQN_minimax(episodes, map_dims, continue_training, continue_on_episode)
 
 
