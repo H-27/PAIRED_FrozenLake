@@ -75,6 +75,12 @@ def run_DQN_random(episodes, map_dims, continue_training, continue_on_episode = 
         adv_map = create_map((10,10))
         adv_map = envs.Env_map(np.zeros((3, map_dims[0], map_dims[1]))).deone_hot_map_with_start(adv_map)
         shortest_path, shortest_path_length = helper.get_shortest_possible_length(adv_map)
+        if shortest_path == None:
+            solvable = False
+            shortest_path_length = map_dims[0] * map_dims[1]
+        else:
+            solvable = True
+        tf.summary.scalar("solvable", solvable, step=0)
         num_blocks = helper.get_num_blocks(adv_map)
         env_map = envs.Env_map(np.zeros((3, map_dims[0], map_dims[0]))).one_hot_map(adv_map)
         maps.append(adv_map)
@@ -105,11 +111,6 @@ def run_DQN_random(episodes, map_dims, continue_training, continue_on_episode = 
             tf.summary.scalar('ant_rewards', np.mean(ant_episode_reward), step=e)
             tf.summary.scalar('ant_shaped_episode_reward', np.mean(ant_shaped_episode_reward), step=e)
             tf.summary.scalar('ant_steps', np.mean(antagonist_steps), step=e)
-            if shortest_path == None:
-                solvable = False
-            else:
-                solvable = True
-            tf.summary.scalar("solvable", solvable, step=0)
             #tf.summary.scalar('value', value, step=e)
 
         # reset agent epsilon
@@ -171,10 +172,11 @@ def save_tensorboard_name():
 if __name__ == '__main__':
     episodes= 1
     map_dims = (10,10)
-    continue_training = False
+    continue_training = True
     print()
     if continue_training:
         continue_on_episode = load_episode()
+        continue_on_episode += 1  # as saved episode should be complete
     else:
         continue_on_episode = 0
     gpus = tf.config.list_physical_devices('GPU')
