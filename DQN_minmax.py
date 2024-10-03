@@ -157,6 +157,8 @@ if __name__ == '__main__':
         continue_on_episode = load_episode()
     else:
         continue_on_episode = 0
+    gpus = tf.config.list_physical_devices('GPU')
+    tf.config.experimental.set_memory_growth(gpus[0], True)
     with tf.device('/GPU:0'):
         run_DQN_minimax(episodes, map_dims, continue_training, continue_on_episode)
 
