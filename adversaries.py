@@ -209,7 +209,6 @@ class DQN_Adversary():
                 done = True
             time_step = tf.convert_to_tensor([i], dtype= tf.float32)
             time_step = tf.expand_dims(time_step, -1)
-
             position, probs = self.choose_action(old_map, time_step, rand_vec)
             y, x = helper.calculate_coordinates(position, self.map_height)
             # insert position

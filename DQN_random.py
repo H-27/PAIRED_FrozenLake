@@ -157,7 +157,7 @@ def create_map(map_dims):
                 remaining_positions = np.delete(remaining_positions, np.where(remaining_positions == used_positions[0]))
                 random_position = np.random.choice(remaining_positions)
                 used_positions.append(random_position)
-                rand_y, rand_x = helper.calculate_coordinates(used_positions, map_dims[1])
+                rand_y, rand_x = helper.calculate_coordinates(random_position, map_dims[1])
                 new_map[2][rand_y][rand_x] = 1
             else:
                 new_map[2][y][x] = 1

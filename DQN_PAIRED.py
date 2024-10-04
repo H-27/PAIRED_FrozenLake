@@ -64,6 +64,9 @@ def run_DQN_PAIRED(episodes, map_dims, continue_training, continue_on_episode = 
     adversary = adversaries.DQN_Adversary(alpha=adversary_alpha, gamma=adversary_gamma, epsilon=adversary_epsilon,
                                           adversary_memory_size=adversary_memory_size, adversary_batch_size=adversary_batch_size,
                                           adversary_network=adversary_network, map_width=map_dims[1], map_height=map_dims[0])
+    if continue_training:
+        for _ in range(continue_on_episode):
+            adversary.epsilon_decay()
 
     # remaining values
     max_steps = (map_dims[0]*map_dims[1]) * 5
@@ -136,7 +139,7 @@ def run_DQN_PAIRED(episodes, map_dims, continue_training, continue_on_episode = 
         if (pro_win_ratio == 0 and ant_win_ratio == 0): regret = -0.0001
         loss = adversary.train(regret)
         losses.append(loss)
-
+        adversary.epsilon_decay()
         # reset agent epsilon
         protagonist.epsilon = agent_epsilon
         antagonist.epsilon = agent_epsilon
@@ -164,7 +167,7 @@ def save_tensorboard_name():
         f.write(str(train_log_dir))
 
 if __name__ == '__main__':
-    episodes= 5
+    episodes= 500000
     map_dims = (10,10)
     continue_training = True
     if continue_training:
