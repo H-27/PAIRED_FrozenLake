@@ -15,15 +15,28 @@ import maps
 
 def run_DQN_minimax(episodes, map_dims, continue_training, continue_on_episode = 0):
     # load weights if to continiue training
+    map_shape = (1, 3, map_dims[0], map_dims[1])  # Assuming a 10x10 map with 3 channels
+    direction_shape = (1, 4)
+    position_shape = (1, map_dims[0] * map_dims[1])
     protagonist_network = networks.Actor_Network(4)
+    dummy_map = tf.random.normal(map_shape)
+    dummy_direction = tf.random.normal(direction_shape)
+    dummy_position = tf.random.normal(position_shape)
+
     if (continue_training):
-        helper.load_model(network=protagonist_network, filepath='DQN_minimax/protagonist')
+        # protagonist_network.build((None, 3, map_dims[0], map_dims[1]), (None, map_dims[0]* map_dims[1]), (None,4))
+        protagonist_network(dummy_map, dummy_direction, dummy_position)
+        helper.load_model(network=protagonist_network, filepath='DQN_PAIRED/protagonist')
     antagonist_network = networks.Actor_Network(4)
     if (continue_training):
-        helper.load_model(network=antagonist_network, filepath='DQN_minimax/antagonist')
+        antagonist_network(dummy_map, dummy_direction, dummy_position)
+        helper.load_model(network=antagonist_network, filepath='DQN_PAIRED/antagonist')
     adversary_network = networks.Adversary_Network(map_dims, True, True)
     if (continue_training):
-        helper.load_model(network=adversary_network, filepath='DQN_minimax/adversary')
+        timestep_shape = (1, 1)
+        dummy_timestep = tf.random.normal(timestep_shape)
+        adversary_network(dummy_map, dummy_timestep, dummy_position)
+        helper.load_model(network=adversary_network, filepath='DQN_PAIRED/adversary')
     # initialize agents
     agent_alpha = 0.001
     agent_gamma = 0.7
@@ -54,7 +67,7 @@ def run_DQN_minimax(episodes, map_dims, continue_training, continue_on_episode =
 
     # remaining values
     max_steps = (map_dims[0]*map_dims[1]) * 5
-    agent_max_episodes = 7501
+    agent_max_episodes = 5001
 
     # train writer
     current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -77,7 +90,6 @@ def run_DQN_minimax(episodes, map_dims, continue_training, continue_on_episode =
         shortest_path, shortest_path_length = helper.get_shortest_possible_length(adv_map)
         if shortest_path == None:
             solvable = False
-            shortest_path_length = map_dims[0] * map_dims[1]
         else:
             solvable = True
         tf.summary.scalar("solvable", solvable, step=0)

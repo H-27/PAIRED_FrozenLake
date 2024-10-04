@@ -10,6 +10,7 @@ import gymnasium as gym
 from gymnasium.wrappers import RecordVideo
 import networkx as nx
 import tensorflow as tf
+import networks
 
 def reward_function(reward, done):
     # for every step
@@ -58,8 +59,8 @@ def gaussian_potential_function(distance_to_goal, map_size):
     return -np.exp(-(distance_to_goal ** 2) / (2 * sigma ** 2))
 
 def calculate_coordinates(position, n_rows):
-    y = (position / n_rows) - (position % n_rows / n_rows)
-    x = position - y * n_rows
+    x = position % n_rows
+    y = position // n_rows  # Use floor division to get the row
     return int(y), int(x)
 
 def calculate_position(y, x, n_rows):
@@ -102,6 +103,7 @@ def save_model(network, filename, use_timestamp = False):
     network.save_weights(pathname)
 
 def load_model(network, filepath):
+    network.built = True
     filepath = '/home/jens/Desktop/Models/' + filepath + '/cp.ckpt'
     network.load_weights(filepath)
 
@@ -267,7 +269,7 @@ def get_shortest_possible_length(adv_map):
         shortest_path_length = len(shortest_path)
     except nx.NetworkXNoPath:
         shortest_path = None
-        shortest_path_length = (cols - 2) * (rows - 2) + 1
+        shortest_path_length = (cols) * (rows)
 
     return shortest_path, shortest_path_length
 
@@ -303,4 +305,36 @@ def calculate_cumulative_discounted_reward(rewards, gamma):
         g += discount * rewards[t]
         discount *= gamma
     return g
+
+def initialize_models(map_dims, continue_training):
+
+  map_shape = (1, 3, map_dims[0], map_dims[1])
+  direction_shape = (1, 4)
+  position_shape = (1, map_dims[0] * map_dims[1])
+
+  protagonist_network = networks.Actor_Network(4)
+  antagonist_network = networks.Actor_Network(4)
+  adversary_network = networks.Adversary_Network(map_dims, True, True)
+
+  if continue_training:
+    # Load pre-trained models
+    load_model(network=protagonist_network, filepath='DQN_PAIRED/protagonist')
+    load_model(network=antagonist_network, filepath='DQN_PAIRED/antagonist')
+    timestep_shape = (1, 1)
+    dummy_timestep = tf.random.normal(timestep_shape)
+    adversary_network(dummy_map=tf.random.normal(map_shape),
+                       dummy_timestep=dummy_timestep,
+                       dummy_position=tf.random.normal(position_shape))
+    load_model(network=adversary_network, filepath='DQN_PAIRED/adversary')
+
+  # Build remaining models if not loading pre-trained ones
+  if not continue_training:
+    protagonist_network(dummy_map=tf.random.normal(map_shape),
+                        dummy_direction=tf.random.normal(direction_shape),
+                        dummy_position=tf.random.normal(position_shape))
+    antagonist_network(dummy_map=tf.random.normal(map_shape),
+                       dummy_direction=tf.random.normal(direction_shape),
+                       dummy_position=tf.random.normal(position_shape))
+
+  return protagonist_network, antagonist_network, adversary_network
 

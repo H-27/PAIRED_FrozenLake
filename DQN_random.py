@@ -15,15 +15,23 @@ import maps
 
 def run_DQN_random(episodes, map_dims, continue_training, continue_on_episode = 0):
     # load weights if to continiue training
+    map_shape = (1, 3, map_dims[0], map_dims[1])  # Assuming a 10x10 map with 3 channels
+    direction_shape = (1, 4)
+    position_shape = (1, map_dims[0] * map_dims[1])
     protagonist_network = networks.Actor_Network(4)
+    dummy_map = tf.random.normal(map_shape)
+    dummy_direction = tf.random.normal(direction_shape)
+    dummy_position = tf.random.normal(position_shape)
+
     if (continue_training):
-        helper.load_model(network=protagonist_network, filepath='DQN_random/protagonist')
+        # protagonist_network.build((None, 3, map_dims[0], map_dims[1]), (None, map_dims[0]* map_dims[1]), (None,4))
+        protagonist_network(dummy_map, dummy_direction, dummy_position)
+        helper.load_model(network=protagonist_network, filepath='DQN_PAIRED/protagonist')
     antagonist_network = networks.Actor_Network(4)
     if (continue_training):
-        helper.load_model(network=antagonist_network, filepath='DQN_random/antagonist')
+        antagonist_network(dummy_map, dummy_direction, dummy_position)
+        helper.load_model(network=antagonist_network, filepath='DQN_PAIRED/antagonist')
     adversary_network = networks.Adversary_Network(map_dims, True, True)
-    if (continue_training):
-        helper.load_model(network=adversary_network, filepath='DQN_random/adversary')
     # initialize agents
     agent_alpha = 0.001
     agent_gamma = 0.7
@@ -54,7 +62,7 @@ def run_DQN_random(episodes, map_dims, continue_training, continue_on_episode = 
 
     # remaining values
     max_steps = (map_dims[0]*map_dims[1]) * 5
-    agent_max_episodes = 7501
+    agent_max_episodes = 5001
 
     # train writer
     current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -77,7 +85,6 @@ def run_DQN_random(episodes, map_dims, continue_training, continue_on_episode = 
         shortest_path, shortest_path_length = helper.get_shortest_possible_length(adv_map)
         if shortest_path == None:
             solvable = False
-            shortest_path_length = map_dims[0] * map_dims[1]
         else:
             solvable = True
         tf.summary.scalar("solvable", solvable, step=0)
@@ -137,9 +144,7 @@ def create_map(map_dims):
     placements = np.random.choice(map_dims[0] * map_dims[1], n_placements, replace=True)
     used_positions = []
     for i in range(n_placements):
-        position = placements[i]
-        if(i == n_placements):
-            done = True
+        position = np.array(placements[i])
         y, x = helper.calculate_coordinates(position, map_dims[1])
         # insert position
         new_map = np.copy(old_map)
@@ -152,14 +157,15 @@ def create_map(map_dims):
                 remaining_positions = np.delete(remaining_positions, np.where(remaining_positions == used_positions[0]))
                 random_position = np.random.choice(remaining_positions)
                 used_positions.append(random_position)
-                rand_y, rand_x = helper.calculate_coordinates(random_position, map_dims[1])
+                rand_y, rand_x = helper.calculate_coordinates(used_positions, map_dims[1])
                 new_map[2][rand_y][rand_x] = 1
             else:
                 new_map[2][y][x] = 1
-        elif(position in used_positions):
-            pass
         else:
-            new_map[1][y][x] = 1
+            if(position in used_positions):
+                pass
+            else:
+                new_map[1][y][x] = 1
         old_map = new_map
         used_positions.append(position)
     return new_map
@@ -170,10 +176,9 @@ def save_tensorboard_name():
         f.write(str(train_log_dir))
 
 if __name__ == '__main__':
-    episodes= 1
+    episodes= 500000
     map_dims = (10,10)
     continue_training = True
-    print()
     if continue_training:
         continue_on_episode = load_episode()
         continue_on_episode += 1  # as saved episode should be complete

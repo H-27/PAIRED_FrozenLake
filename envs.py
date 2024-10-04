@@ -29,8 +29,9 @@ class Env_map():
 
     def deone_hot_map_with_start(self, one_hotted_map):
         new_map = np.zeros((self.initial_map.shape[1],self.initial_map.shape[2]), dtype='U1')
-        new_map[one_hotted_map[0] == 1] = 'S'
+        # easy fix: assign S after H
         new_map[one_hotted_map[1] == 1] = 'H'
+        new_map[one_hotted_map[0] == 1] = 'S'
         new_map[one_hotted_map[2] == 1] = 'G'
         new_map[new_map == ''] = 'F'
         return new_map

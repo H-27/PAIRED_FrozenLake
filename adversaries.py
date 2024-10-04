@@ -227,10 +227,11 @@ class DQN_Adversary():
                     new_map[2][rand_y][rand_x] = 1
                 else:
                     new_map[2][y][x] = 1
-            elif(position in used_positions):
-                pass
             else:
-                new_map[1][y][x] = 1
+                if (position in used_positions):
+                    pass
+                else:
+                    new_map[1][y][x] = 1
             self.buffer.storeTransition(old_state=old_map, new_state=new_map, direction = time_step, position = rand_vec, action = position, reward = 0, done = done)
             old_map = new_map
             used_positions.append(position)
@@ -361,7 +362,6 @@ class DQN_Adversary():
             chosen_action = tf.argmax(target_q, axis=1) # correct axis?
             target_value = tf.reduce_sum(tf.one_hot(chosen_action, self.n_possible_state_values) * target_q, axis=1)
             target_value = (1-dones) * self.gamma * target_value + rewards
-
             main_q = self.adversary_network(old_states, time_steps, rand_vecs)
             main_value = tf.reduce_sum(tf.one_hot(actions, self.n_possible_state_values) * main_q, axis=1)
 
