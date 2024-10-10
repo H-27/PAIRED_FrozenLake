@@ -65,9 +65,10 @@ def run_DQN_random(episodes, map_dims, continue_training, continue_on_episode = 
     agent_max_episodes = 5001
 
     # train writer
-    current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    train_log_dir = 'DQN_random/logs/fit/' + current_time
-    train_writer = tf.summary.create_file_writer(train_log_dir)
+    train_log_dir = 'DQN_complete/logs/fit/'
+    random_pro_summary_writer = tf.summary.create_file_writer(train_log_dir + "random_pro_logs")
+    random_ant_summary_writer = tf.summary.create_file_writer(train_log_dir + "random_ant_logs")
+    random_adv_summary_writer = tf.summary.create_file_writer(train_log_dir + "random_adv_logs")
 
     #metrics
     protagonist_steps = []
@@ -105,19 +106,26 @@ def run_DQN_random(episodes, map_dims, continue_training, continue_on_episode = 
         antagonist_win_ratio.append(ant_win_ratio)
         protagonist_steps.append(np.mean(pro_steps_per_episode))
         antagonist_steps.append(np.mean(ant_steps_per_episode))
-        with train_writer.as_default():
+        with random_adv_summary_writer.as_default():
             tf.summary.scalar('shortest_path_length', shortest_path_length, step=e)
             tf.summary.scalar('num_blocks', num_blocks, step=e)
-            tf.summary.scalar('pro_losses', np.mean(pro_losses), step=e)
-            tf.summary.scalar('pro_win_ratio', pro_win_ratio, step=e)
-            tf.summary.scalar('pro_rewards', np.mean(pro_episode_reward), step=e)
-            tf.summary.scalar('pro_shaped_rewards', np.mean(pro_shaped_episode_reward), step=e)
-            tf.summary.scalar('pro_steps', np.mean(protagonist_steps), step=e)
-            tf.summary.scalar('ant_losses', np.mean(ant_losses), step=e)
-            tf.summary.scalar('ant_win_ratio', ant_win_ratio, step=e)
-            tf.summary.scalar('ant_rewards', np.mean(ant_episode_reward), step=e)
-            tf.summary.scalar('ant_shaped_episode_reward', np.mean(ant_shaped_episode_reward), step=e)
-            tf.summary.scalar('ant_steps', np.mean(antagonist_steps), step=e)
+
+        with random_pro_summary_writer.as_default():
+
+            tf.summary.scalar('losses', np.mean(pro_losses), step=e)  # Overlap pro_losses and ant_losses
+            tf.summary.scalar('win_ratio', pro_win_ratio, step=e)  # Overlap pro_win_ratio and ant_win_ratio
+            tf.summary.scalar('rewards', np.mean(pro_episode_reward), step=e)  # Overlap pro_rewards and ant_rewards
+            tf.summary.scalar('shaped_rewards', np.mean(pro_shaped_episode_reward),
+                              step=e)  # Overlap pro_shaped_episode_reward and ant_shaped_episode_reward
+            tf.summary.scalar('steps', np.mean(protagonist_steps), step=e)  # Overlap pro_steps and ant_steps
+
+        with random_ant_summary_writer.as_default():
+            tf.summary.scalar('losses', np.mean(ant_losses), step=e)  # Overlap pro_losses and ant_losses
+            tf.summary.scalar('win_ratio', ant_win_ratio, step=e)  # Overlap pro_win_ratio and ant_win_ratio
+            tf.summary.scalar('rewards', np.mean(ant_episode_reward), step=e)  # Overlap pro_rewards and ant_rewards
+            tf.summary.scalar('shaped_episode_reward', np.mean(ant_shaped_episode_reward),
+                              step=e)  # Overlap pro_shaped_episode_reward and ant_shaped_episode_reward
+            tf.summary.scalar('steps', np.mean(antagonist_steps), step=e)  # Overlap pro_steps and ant_steps
             #tf.summary.scalar('value', value, step=e)
 
         # reset agent epsilon

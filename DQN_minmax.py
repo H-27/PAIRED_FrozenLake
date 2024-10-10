@@ -66,15 +66,17 @@ def run_DQN_minimax(episodes, map_dims, continue_training, continue_on_episode =
                                           adversary_network=adversary_network, map_width=map_dims[1], map_height=map_dims[0])
     if continue_training:
         for _ in range(continue_on_episode):
-            adversary.epsilon_decay()
+            adversary.epsilon_decay(0.002)
+        adversary.buffer.load("DQN_minimax_buffer.pkl")
     # remaining values
     max_steps = (map_dims[0]*map_dims[1]) * 5
     agent_max_episodes = 5001
 
     # train writer
-    current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    train_log_dir = 'DQN_minimax/logs/fit/' + current_time
-    train_writer = tf.summary.create_file_writer(train_log_dir)
+    train_log_dir = 'DQN_complete/logs/fit/'
+    minimax_pro_summary_writer = tf.summary.create_file_writer(train_log_dir + "minimax_pro_logs")
+    minimax_ant_summary_writer = tf.summary.create_file_writer(train_log_dir + "minimax_ant_logs")
+    minimax_adv_summary_writer = tf.summary.create_file_writer(train_log_dir + "minimax_adv_logs")
 
     #metrics
     protagonist_steps = []
@@ -115,20 +117,27 @@ def run_DQN_minimax(episodes, map_dims, continue_training, continue_on_episode =
         antagonist_win_ratio.append(ant_win_ratio)
         protagonist_steps.append(np.mean(pro_steps_per_episode))
         antagonist_steps.append(np.mean(ant_steps_per_episode))
-        with train_writer.as_default():
+        with minimax_adv_summary_writer.as_default():
+            tf.summary.scalar('regret', regret, step=e)  # Keep "regret" separate
             tf.summary.scalar('shortest_path_length', shortest_path_length, step=e)
             tf.summary.scalar('num_blocks', num_blocks, step=e)
-            tf.summary.scalar('pro_losses', np.mean(pro_losses), step=e)
-            tf.summary.scalar('pro_win_ratio', pro_win_ratio, step=e)
-            tf.summary.scalar('pro_rewards', np.mean(pro_episode_reward), step=e)
-            tf.summary.scalar('pro_shaped_rewards', np.mean(pro_shaped_episode_reward), step=e)
-            tf.summary.scalar('pro_steps', np.mean(protagonist_steps), step=e)
-            tf.summary.scalar('ant_losses', np.mean(ant_losses), step=e)
-            tf.summary.scalar('ant_win_ratio', ant_win_ratio, step=e)
-            tf.summary.scalar('ant_rewards', np.mean(ant_episode_reward), step=e)
-            tf.summary.scalar('ant_shaped_episode_reward', np.mean(ant_shaped_episode_reward), step=e)
-            tf.summary.scalar('ant_steps', np.mean(antagonist_steps), step=e)
-            tf.summary.scalar('regret', regret, step=e)
+
+        with minimax_pro_summary_writer.as_default():
+
+            tf.summary.scalar('losses', np.mean(pro_losses), step=e)  # Overlap pro_losses and ant_losses
+            tf.summary.scalar('win_ratio', pro_win_ratio, step=e)  # Overlap pro_win_ratio and ant_win_ratio
+            tf.summary.scalar('rewards', np.mean(pro_episode_reward), step=e)  # Overlap pro_rewards and ant_rewards
+            tf.summary.scalar('shaped_rewards', np.mean(pro_shaped_episode_reward),
+                              step=e)  # Overlap pro_shaped_episode_reward and ant_shaped_episode_reward
+            tf.summary.scalar('steps', np.mean(protagonist_steps), step=e)  # Overlap pro_steps and ant_steps
+
+        with minimax_ant_summary_writer.as_default():
+            tf.summary.scalar('losses', np.mean(ant_losses), step=e)  # Overlap pro_losses and ant_losses
+            tf.summary.scalar('win_ratio', ant_win_ratio, step=e)  # Overlap pro_win_ratio and ant_win_ratio
+            tf.summary.scalar('rewards', np.mean(ant_episode_reward), step=e)  # Overlap pro_rewards and ant_rewards
+            tf.summary.scalar('shaped_episode_reward', np.mean(ant_shaped_episode_reward),
+                              step=e)  # Overlap pro_shaped_episode_reward and ant_shaped_episode_reward
+            tf.summary.scalar('steps', np.mean(antagonist_steps), step=e)  # Overlap pro_steps and ant_steps
             #tf.summary.scalar('value', value, step=e)
 
         # could use regret with reward function to get closer to target or
@@ -136,13 +145,14 @@ def run_DQN_minimax(episodes, map_dims, continue_training, continue_on_episode =
         if (pro_win_ratio == 0 and ant_win_ratio == 0): regret = -0.0001
         loss = adversary.train(regret)
         losses.append(loss)
-        adversary.epsilon_decay()
+        adversary.epsilon_decay(0.002)
         # reset agent epsilon
         protagonist.epsilon = agent_epsilon
         antagonist.epsilon = agent_epsilon
         # save adversary after training
         helper.save_model(adversary_network, 'DQN_minimax/adversary')
         print(f'Episode: {e}')
+        adversary.buffer.save("DQN_minimax_buffer.pkl")
         save_episode(e)
         save_tensorboard_name()
         print(f'regret: {regret}')

@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+import pickle
 
 class Buffer(object):
 
@@ -43,6 +44,34 @@ class Buffer(object):
                 discount *= gamma
             g[i] = g_sum
         return g
+
+    def save(self, filename):
+        data = {
+            "states": self.states,
+            "directions": self.directions,
+            "positions": self.positions,
+            "actions": self.actions,
+            "rewards": self.rewards,
+            "values": self.values,
+            "probs": self.probs,
+            "dones": self.dones
+        }
+
+        with open(filename, "wb") as f:
+            pickle.dump(data, f)
+
+    def load(self, filename):
+        with open(filename, "rb") as f:
+            data = pickle.load(f)
+
+        self.states = data["states"]
+        self.directions = data["directions"]
+        self.positions = data["positions"]
+        self.actions = data["actions"]
+        self.rewards = data["rewards"]
+        self.values = data["values"]
+        self.probs = data["probs"]
+        self.dones = data["dones"]
 
 class DQN_Buffer():
     def __init__(self, memory_size, x, y):
@@ -108,6 +137,35 @@ class Direction_DQN_Buffer():
         dones = self.dones[batch]
         return old_states, new_states, directions, positions, actions, rewards, dones
 
+    def save(self, filename):
+        data = {
+            "memory_size": self.memory_size,
+            "memory_counter": self.memory_counter,
+            "states": self.states,
+            "directions": self.directions,
+            "positions": self.positions,
+            "new_states": self.new_states,
+            "actions": self.actions,
+            "rewards": self.rewards,
+            "dones": self.dones
+        }
+
+        with open(filename, "wb") as f:
+            pickle.dump(data, f)
+
+    def load(self, filename):
+        with open(filename, "rb") as f:
+            data = pickle.load(f)
+
+        self.memory_size = data["memory_size"]
+        self.memory_counter = data["memory_counter"]
+        self.states = data["states"]
+        self.directions = data["directions"]
+        self.positions = data["positions"]
+        self.new_states = data["new_states"]
+        self.actions = data["actions"]
+        self.rewards = data["rewards"]
+        self.dones = data["dones"]
 class Vectorized_PPO_Buffer():
     def __init__(self, batch_size):
         self.states = []

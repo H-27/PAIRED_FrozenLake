@@ -21,7 +21,13 @@ def reward_function(reward, done):
         reward = -2
     # case for goal
     elif (done and reward > 0): # reached goal
-        reward = 10
+        reward = 2
+
+
+
+
+
+
     return reward
 
 old_global_distance = None

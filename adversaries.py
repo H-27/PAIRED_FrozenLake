@@ -165,7 +165,7 @@ class DQN_Adversary():
         self.n_possible_state_values = map_width * map_height
         self.n_placements = int(np.round(self.n_possible_state_values * 0.3) + 2)
         self.buffer = buffers.Direction_DQN_Buffer(self.n_placements, map_width, map_height)
-        self.buffer.directions = np.zeros((adversary_memory_size, 1))
+        self.buffer.directions = np.zeros((adversary_memory_size, 1)) # timestep has different depth
         self.adversary_network = adversary_network
         self.optimizer = tf.keras.optimizers.Adam(alpha)
 
@@ -336,7 +336,7 @@ class DQN_Adversary():
                 wins = 0
             e += 1
         episodes_until_convergence = e
-        win_ratio = 0 if wins == 0 else e / wins
+        win_ratio = 0 if wins == 0 else wins/e
         return losses, win_ratio, shaped_cumulative_discounted_rewards, cumulative_discounted_rewards, steps_per_episode, episodes_until_convergence
 
     def calculate_regret(self, pro_rewards, ant_rewards, env):
@@ -349,7 +349,7 @@ class DQN_Adversary():
 
     def train(self, regret):
         self.buffer.rewards[-1] = regret
-        if (self.buffer.memory_counter < self.n_placements):
+        if (self.buffer.memory_counter < self.batch_size):
             return 0
         old_states, new_states, time_steps, rand_vecs, actions, rewards, dones = self.buffer.create_batch(self.n_placements)
         with tf.GradientTape() as tape:
