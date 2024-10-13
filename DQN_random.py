@@ -26,11 +26,12 @@ def run_DQN_random(episodes, map_dims, continue_training, continue_on_episode = 
     if (continue_training):
         # protagonist_network.build((None, 3, map_dims[0], map_dims[1]), (None, map_dims[0]* map_dims[1]), (None,4))
         protagonist_network(dummy_map, dummy_direction, dummy_position)
-        helper.load_model(network=protagonist_network, filepath='DQN_PAIRED/protagonist')
+        helper.load_model(network=protagonist_network, filepath='DQN_random/protagonist')
     antagonist_network = networks.Actor_Network(4)
     if (continue_training):
         antagonist_network(dummy_map, dummy_direction, dummy_position)
-        helper.load_model(network=antagonist_network, filepath='DQN_PAIRED/antagonist')
+        helper.load_model(network=antagonist_network, filepath='DQN_random/antagonist')
+
     adversary_network = networks.Adversary_Network(map_dims, True, True)
     # initialize agents
     agent_alpha = 0.001
@@ -45,7 +46,6 @@ def run_DQN_random(episodes, map_dims, continue_training, continue_on_episode = 
                                    network=protagonist_network,
                                    use_direction=False, use_position=False)
 
-    antagonist_network = networks.Actor_Network(4)
     antagonist = agents.DQN_Agent(alpha=agent_alpha, gamma=agent_gamma, epsilon=agent_epsilon, epsilon_decay=agent_epsilon_decay,
                                   n_actions=4, map_dims=map_dims,
                                   memory_size=agent_memory_size, training_batch_size=agent_training_batch_size, network=antagonist_network,
@@ -88,7 +88,7 @@ def run_DQN_random(episodes, map_dims, continue_training, continue_on_episode = 
             solvable = False
         else:
             solvable = True
-        tf.summary.scalar("solvable", solvable, step=0)
+
         num_blocks = helper.get_num_blocks(adv_map)
         env_map = envs.Env_map(np.zeros((3, map_dims[0], map_dims[0]))).one_hot_map(adv_map)
         maps.append(adv_map)
@@ -109,13 +109,14 @@ def run_DQN_random(episodes, map_dims, continue_training, continue_on_episode = 
         with random_adv_summary_writer.as_default():
             tf.summary.scalar('shortest_path_length', shortest_path_length, step=e)
             tf.summary.scalar('num_blocks', num_blocks, step=e)
+            tf.summary.scalar("solvable", solvable, step=e)
 
         with random_pro_summary_writer.as_default():
 
             tf.summary.scalar('losses', np.mean(pro_losses), step=e)  # Overlap pro_losses and ant_losses
             tf.summary.scalar('win_ratio', pro_win_ratio, step=e)  # Overlap pro_win_ratio and ant_win_ratio
             tf.summary.scalar('rewards', np.mean(pro_episode_reward), step=e)  # Overlap pro_rewards and ant_rewards
-            tf.summary.scalar('shaped_rewards', np.mean(pro_shaped_episode_reward),
+            tf.summary.scalar('shaped_episode_reward', np.mean(pro_shaped_episode_reward),
                               step=e)  # Overlap pro_shaped_episode_reward and ant_shaped_episode_reward
             tf.summary.scalar('steps', np.mean(protagonist_steps), step=e)  # Overlap pro_steps and ant_steps
 
@@ -184,7 +185,7 @@ def save_tensorboard_name():
         f.write(str(train_log_dir))
 
 if __name__ == '__main__':
-    episodes= 500000
+    episodes= 703
     map_dims = (10,10)
     continue_training = True
     if continue_training:

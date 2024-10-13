@@ -1,7 +1,7 @@
 import networks
 import helper
 import agents
-import adversaries
+import adversary as adv
 import envs
 import buffers
 import numpy as np
@@ -26,17 +26,17 @@ def run_DQN_PAIRED(episodes, map_dims, continue_training, continue_on_episode = 
     if (continue_training):
         #protagonist_network.build((None, 3, map_dims[0], map_dims[1]), (None, map_dims[0]* map_dims[1]), (None,4))
         protagonist_network(dummy_map, dummy_direction, dummy_position)
-        helper.load_model(network=protagonist_network, filepath='DQN_PAIRED/protagonist')
+        helper.load_model(network=protagonist_network, filepath='PAIRED/protagonist')
     antagonist_network = networks.Actor_Network(4)
     if (continue_training):
         antagonist_network(dummy_map, dummy_direction, dummy_position)
-        helper.load_model(network=antagonist_network, filepath='DQN_PAIRED/antagonist')
+        helper.load_model(network=antagonist_network, filepath='PAIRED/antagonist')
     adversary_network = networks.Adversary_Network(map_dims, True, True)
     if (continue_training):
         timestep_shape = (1, 1)
         dummy_timestep = tf.random.normal(timestep_shape)
         adversary_network(dummy_map, dummy_timestep, dummy_position)
-        helper.load_model(network=adversary_network, filepath='DQN_PAIRED/adversary')
+        helper.load_model(network=adversary_network, filepath='PAIRED/adversary')
     # initialize agents
     agent_alpha = 0.001
     agent_gamma = 0.7
@@ -61,20 +61,20 @@ def run_DQN_PAIRED(episodes, map_dims, continue_training, continue_on_episode = 
     adversary_epsilon_decay = 0.002
     adversary_memory_size = 100000
     adversary_batch_size = 64
-    adversary = adversaries.DQN_Adversary(alpha=adversary_alpha, gamma=adversary_gamma, epsilon=adversary_epsilon,
+    adversary = adv.DQN_Adversary(alpha=adversary_alpha, gamma=adversary_gamma, epsilon=adversary_epsilon,
                                           adversary_memory_size=adversary_memory_size, adversary_batch_size=adversary_batch_size,
                                           adversary_network=adversary_network, map_width=map_dims[1], map_height=map_dims[0])
     if continue_training:
         for _ in range(continue_on_episode):
             adversary.epsilon_decay(adversary_epsilon_decay)
-        adversary.buffer.load("DQN_PAIRED_buffer.pkl")
+        adversary.buffer.load("PAIRED_buffer.pkl")
 
     # remaining values
     max_steps = (map_dims[0]*map_dims[1]) * 5
     agent_max_episodes = 5001
 
     # train writer
-    train_log_dir = 'DQN_complete/logs/fit/'
+    train_log_dir = 'complete/logs/fit/'
     paired_pro_summary_writer = tf.summary.create_file_writer(train_log_dir + "PAIRED_pro_logs")
     paired_ant_summary_writer = tf.summary.create_file_writer(train_log_dir + "PAIRED_ant_logs")
     paired_adv_summary_writer = tf.summary.create_file_writer(train_log_dir + "PAIRED_adv_logs")
@@ -91,6 +91,7 @@ def run_DQN_PAIRED(episodes, map_dims, continue_training, continue_on_episode = 
     for e in range(start_value, episodes):
         # create map and get values
         adv_map = adversary.create_map()
+        distance = helper.get_distance(adv_map)
         adv_map = envs.Env_map(np.zeros((3, map_dims[0], map_dims[1]))).deone_hot_map_with_start(adv_map)
         shortest_path, shortest_path_length = helper.get_shortest_possible_length(adv_map)
         if shortest_path == None:
@@ -103,10 +104,10 @@ def run_DQN_PAIRED(episodes, map_dims, continue_training, continue_on_episode = 
         maps.append(adv_map)
         #training protagonist
         print('training protagonist')
-        pro_losses, pro_win_ratio, pro_shaped_episode_reward, pro_episode_reward, pro_steps_per_episode, pro_episodes_until_convergence = adversary.collect_trajectories(env_map, protagonist, agent_max_episodes)
-        #training antagonist
+        pro_losses, pro_win_ratio, pro_shaped_episode_reward, pro_episode_reward, pro_steps_per_episode, pro_solved_path_length = adversary.collect_trajectories(env_map, protagonist, agent_max_episodes)
+        # training antagonist
         print('training antagonist')
-        ant_losses, ant_win_ratio, ant_shaped_episode_reward, ant_episode_reward, ant_steps_per_episode, ant_episodes_until_convergence = adversary.collect_trajectories(env_map, antagonist, agent_max_episodes)
+        ant_losses, ant_win_ratio, ant_shaped_episode_reward, ant_episode_reward, ant_steps_per_episode, ant_solved_path_length = adversary.collect_trajectories(env_map, antagonist, agent_max_episodes)
 
 
         regret = np.max(ant_episode_reward) - np.mean(pro_episode_reward)
@@ -119,6 +120,7 @@ def run_DQN_PAIRED(episodes, map_dims, continue_training, continue_on_episode = 
             tf.summary.scalar('regret', regret, step=e)  # Keep "regret" separate
             tf.summary.scalar('shortest_path_length', shortest_path_length, step=e)
             tf.summary.scalar('num_blocks', num_blocks, step=e)
+            tf.summary.scalar('distance_to_goal', np.mean(distance), step=e)
             tf.summary.scalar("solvable", solvable, step=e)
 
         with paired_pro_summary_writer.as_default():
@@ -128,6 +130,7 @@ def run_DQN_PAIRED(episodes, map_dims, continue_training, continue_on_episode = 
             tf.summary.scalar('rewards', np.mean(pro_episode_reward), step=e)  # Overlap pro_rewards and ant_rewards
             tf.summary.scalar('shaped_episode_reward', np.mean(pro_shaped_episode_reward), step=e)  # Overlap pro_shaped_episode_reward and ant_shaped_episode_reward
             tf.summary.scalar('steps', np.mean(protagonist_steps), step=e)  # Overlap pro_steps and ant_steps
+            tf.summary.scalar('solved_path_length', np.mean(pro_solved_path_length), step=e)
 
         with paired_ant_summary_writer.as_default():
             tf.summary.scalar('losses', np.mean(ant_losses), step=e)  # Overlap pro_losses and ant_losses
@@ -135,11 +138,12 @@ def run_DQN_PAIRED(episodes, map_dims, continue_training, continue_on_episode = 
             tf.summary.scalar('rewards', np.mean(ant_episode_reward), step=e)  # Overlap pro_rewards and ant_rewards
             tf.summary.scalar('shaped_episode_reward', np.mean(ant_shaped_episode_reward), step=e)  # Overlap pro_shaped_episode_reward and ant_shaped_episode_reward
             tf.summary.scalar('steps', np.mean(antagonist_steps), step=e)  # Overlap pro_steps and ant_steps
+            tf.summary.scalar('solved_path_length', np.mean(ant_solved_path_length), step=e)
             #tf.summary.scalar('value', value, step=e)
 
         # could use regret with reward function to get closer to target or
         # use original rewards and negative reward if all are 0 i.e. no wins
-        if (pro_win_ratio == 0 and ant_win_ratio == 0): regret = -0.0001
+        if(regret < 0): regret = 0
         loss = adversary.train(regret)
         losses.append(loss)
         adversary.epsilon_decay(adversary_epsilon_decay)
@@ -147,35 +151,35 @@ def run_DQN_PAIRED(episodes, map_dims, continue_training, continue_on_episode = 
         protagonist.epsilon = agent_epsilon
         antagonist.epsilon = agent_epsilon
         # save adversary after training
-        helper.save_model(adversary_network, 'DQN_PAIRED/adversary')
+        helper.save_model(adversary_network, 'PAIRED/adversary')
         # save agents after training
-        helper.save_model(protagonist_network, 'DQN_PAIRED/protagonist')
-        helper.save_model(antagonist_network, 'DQN_PAIRED/antagonist')
+        helper.save_model(protagonist_network, 'PAIRED/protagonist')
+        helper.save_model(antagonist_network, 'PAIRED/antagonist')
 
         print(f'Episode: {e}')
-        adversary.buffer.save("DQN_PAIRED_buffer.pkl")
+        adversary.buffer.save("PAIRED_buffer.pkl")
         save_episode(e)
         save_tensorboard_name()
         print(f'regret: {regret}')
     print('tensorboard --logdir=' + train_log_dir)
 
 def load_episode():
-    with open("DQN_PAIRED-episode_value.txt", "r") as f:
+    with open("PAIRED-episode_value.txt", "r") as f:
         string = f.read()
         value = int(string)
     return value
 def save_episode(value):
-    with open("DQN_PAIRED-episode_value.txt", "w") as f:
+    with open("PAIRED-episode_value.txt", "w") as f:
         f.write(str(value))
 
 def save_tensorboard_name():
     current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    train_log_dir = 'DQN_PAIRED/logs/fit/' + current_time
-    with open("save_DQN_PAIRED-tensorboard_name.txt", "w") as f:
+    train_log_dir = 'PAIRED/logs/fit/' + current_time
+    with open("save_PAIRED-tensorboard_name.txt", "w") as f:
         f.write(str(train_log_dir))
 
 if __name__ == '__main__':
-    episodes= 551
+    episodes= 500000
     map_dims = (10,10)
     continue_training = True
     if continue_training:

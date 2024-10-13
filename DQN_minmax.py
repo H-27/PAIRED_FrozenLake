@@ -26,17 +26,17 @@ def run_DQN_minimax(episodes, map_dims, continue_training, continue_on_episode =
     if (continue_training):
         # protagonist_network.build((None, 3, map_dims[0], map_dims[1]), (None, map_dims[0]* map_dims[1]), (None,4))
         protagonist_network(dummy_map, dummy_direction, dummy_position)
-        helper.load_model(network=protagonist_network, filepath='DQN_PAIRED/protagonist')
+        helper.load_model(network=protagonist_network, filepath='DQN_minimax/protagonist')
     antagonist_network = networks.Actor_Network(4)
     if (continue_training):
         antagonist_network(dummy_map, dummy_direction, dummy_position)
-        helper.load_model(network=antagonist_network, filepath='DQN_PAIRED/antagonist')
+        helper.load_model(network=antagonist_network, filepath='DQN_minimax/antagonist')
     adversary_network = networks.Adversary_Network(map_dims, True, True)
     if (continue_training):
         timestep_shape = (1, 1)
         dummy_timestep = tf.random.normal(timestep_shape)
         adversary_network(dummy_map, dummy_timestep, dummy_position)
-        helper.load_model(network=adversary_network, filepath='DQN_PAIRED/adversary')
+        helper.load_model(network=adversary_network, filepath='DQN_minimax/adversary')
     # initialize agents
     agent_alpha = 0.001
     agent_gamma = 0.7
@@ -50,7 +50,6 @@ def run_DQN_minimax(episodes, map_dims, continue_training, continue_on_episode =
                                    network=protagonist_network,
                                    use_direction=False, use_position=False)
 
-    antagonist_network = networks.Actor_Network(4)
     antagonist = agents.DQN_Agent(alpha=agent_alpha, gamma=agent_gamma, epsilon=agent_epsilon, epsilon_decay=agent_epsilon_decay,
                                   n_actions=4, map_dims=map_dims,
                                   memory_size=agent_memory_size, training_batch_size=agent_training_batch_size, network=antagonist_network,
@@ -97,7 +96,6 @@ def run_DQN_minimax(episodes, map_dims, continue_training, continue_on_episode =
             solvable = False
         else:
             solvable = True
-        tf.summary.scalar("solvable", solvable, step=0)
         num_blocks = helper.get_num_blocks(adv_map)
         env_map = envs.Env_map(np.zeros((3, map_dims[0], map_dims[0]))).one_hot_map(adv_map)
         maps.append(adv_map)
@@ -122,6 +120,7 @@ def run_DQN_minimax(episodes, map_dims, continue_training, continue_on_episode =
             tf.summary.scalar('regret', regret, step=e)  # Keep "regret" separate
             tf.summary.scalar('shortest_path_length', shortest_path_length, step=e)
             tf.summary.scalar('num_blocks', num_blocks, step=e)
+            tf.summary.scalar("solvable", solvable, step=e)
 
         with minimax_pro_summary_writer.as_default():
 
@@ -173,7 +172,7 @@ def save_tensorboard_name():
         f.write(str(train_log_dir))
 
 if __name__ == '__main__':
-    episodes= 500000
+    episodes= 551
     map_dims = (10,10)
     continue_training = True
     if continue_training:
