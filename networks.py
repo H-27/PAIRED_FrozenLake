@@ -13,7 +13,7 @@ class Actor_Network(tf.keras.Model):
         self.flatten = tf.keras.layers.Flatten()
 
     @tf.function
-    def call(self, map, position, direction, use_direction = False, use_position = False, training=True, transpose=True):
+    def call(self, map, position, direction, use_direction = False, use_position = False, training=True, transpose=False):
         if (transpose):
             # transposes input from channel first to channel last
             map = tf.transpose(map, perm = [0,2,3,1])
@@ -44,7 +44,7 @@ class Critic_Network(tf.keras.Model):
         self.flatten = tf.keras.layers.Flatten()
 
     @tf.function
-    def call(self, map, position, direction,  use_direction = False, use_position = False, training=True, transpose=True):
+    def call(self, map, position, direction,  use_direction = False, use_position = False, training=True, transpose=False):
         if (transpose):
             # transposes input from channel first to channel last
             map = tf.transpose(map, perm = [0,2,3,1])
@@ -76,7 +76,7 @@ class Conv_Network(tf.keras.Model):
         self.flatten = tf.keras.layers.Flatten()
 
     @tf.function
-    def call(self, map, training=True, transpose=True):
+    def call(self, map, training=True, transpose=False):
         if (transpose):
             # transposes input from channel first to channel last
             map = tf.transpose(map, perm = [0,2,3,1])
@@ -104,7 +104,7 @@ class Adversary_Network(tf.keras.Model):
         self.flatten = tf.keras.layers.Flatten()
 
     @tf.function
-    def call(self, map, timestep, rand_vec, training=True, transpose=True):
+    def call(self, map, timestep, rand_vec, training=True, transpose=False):
         if (transpose):
             # transposes input from channel first to channel last
             map = tf.transpose(map, perm = [0,2,3,1])
