@@ -97,7 +97,7 @@ class Adversary_Network(tf.keras.Model):
         self.use_rand_vec = use_rand_vec
         self.layer_single_conv = self.convolution = tf.keras.layers.Conv2D(32, kernel_size=(3,3), padding='valid', data_format='channels_first')
         self.dense_extra = tf.keras.layers.Dense(5, activation=tf.nn.relu)
-        self.lstm = tf.keras.layers.LSTM(256, activation='tanh', recurrent_activation='sigmoid',)
+        self.lstm = tf.keras.layers.LSTM(128, activation='tanh', recurrent_activation='sigmoid',)
         self.dense_one = tf.keras.layers.Dense(32, activation=tf.nn.relu)#, kernel_initializer=tf.initializers.random_normal, bias_initializer=tf.initializers.zeros)
         self.dense_two = tf.keras.layers.Dense(32, activation=tf.nn.relu)#, kernel_initializer=tf.initializers.random_normal, bias_initializer=tf.initializers.zeros)
         self.layer_out = tf.keras.layers.Dense(units = map_dims[0]*map_dims[1], activation = tf.nn.softmax, use_bias=False)
