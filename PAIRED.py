@@ -111,6 +111,7 @@ def run_DQN_PAIRED(episodes, map_dims, continue_training, continue_on_episode = 
 
 
         regret = np.max(ant_episode_reward) - np.mean(pro_episode_reward)
+        if (regret < 0): regret = 0
 
         protagonist_win_ratio.append(pro_win_ratio)
         antagonist_win_ratio.append(ant_win_ratio)
@@ -143,13 +144,10 @@ def run_DQN_PAIRED(episodes, map_dims, continue_training, continue_on_episode = 
 
         # could use regret with reward function to get closer to target or
         # use original rewards and negative reward if all are 0 i.e. no wins
-        if(regret < 0): regret = 0
+
         loss = adversary.train(regret)
         losses.append(loss)
         adversary.epsilon_decay(adversary_epsilon_decay)
-        # reset agent epsilon
-        protagonist.epsilon = agent_epsilon
-        antagonist.epsilon = agent_epsilon
         # save adversary after training
         helper.save_model(adversary_network, 'PAIRED/adversary')
         # save agents after training
@@ -179,7 +177,7 @@ def save_tensorboard_name():
         f.write(str(train_log_dir))
 
 if __name__ == '__main__':
-    episodes= 500000
+    episodes= 21000
     map_dims = (10,10)
     continue_training = True
     if continue_training:

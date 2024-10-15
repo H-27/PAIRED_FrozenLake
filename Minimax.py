@@ -148,9 +148,6 @@ def run_DQN_minimax(episodes, map_dims, continue_training, continue_on_episode =
         loss = adversary.train(regret)
         losses.append(loss)
         adversary.epsilon_decay(adversary_epsilon_decay)
-        # reset agent epsilon
-        protagonist.epsilon = agent_epsilon
-        antagonist.epsilon = agent_epsilon
         # save adversary after training
         helper.save_model(adversary_network, 'Minimax/adversary')
         print(f'Episode: {e}')
@@ -176,7 +173,7 @@ def save_tensorboard_name():
         f.write(str(train_log_dir))
 
 if __name__ == '__main__':
-    episodes= 500000
+    episodes= 21000
     map_dims = (10,10)
     continue_training = True
     if continue_training:

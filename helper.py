@@ -4,8 +4,9 @@ from tkinter import *
 import matplotlib.pyplot as plt
 import datetime
 import os
-import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
 import gymnasium as gym
 from gymnasium.wrappers import RecordVideo
 import networkx as nx
@@ -178,38 +179,50 @@ def visualize_and_save_metrics(metrics, output_filename='metrics.png'):
     df.to_csv('metrics.csv', index=False)
     print("DataFrame saved to metrics.csv")
 
-def evaluate_policy(env, env_map, agent):
+def evaluate_policy(env, env_map, agent, name_prefix = 'e'):
     video_folder = os.path.join(os.path.join(os.path.expanduser('~')), 'Desktop/Videos/')
     wins = 0
-    done = False
-    map_dims = env_map.shape
+
+    map_dims = (10,10)
+    steps_per_episode_in_won = []
+    episode_reward = []
+    cumulative_discounted_rewards = []
     for e in range(100):
+        steps = 0
+        done = False
         position, _ = env.reset()
         direction = tf.one_hot(0, 4)
         _, old_state = env_map.map_step(position)
         position = tf.one_hot(position, map_dims[0] * map_dims[1])
         # Record video every 10th episode using the 'name_prefix' argument
         if e % 10 == 0:
-            env = RecordVideo(env, video_folder=video_folder, name_prefix=e)
+            env = RecordVideo(env, video_folder=video_folder, name_prefix=name_prefix)
         else:
             env = env  # Continue using the original environment without recording
 
         # play game
         old_state, _ = env.reset()
         _, old_state = env_map.map_step(old_state)
+
         while not done:
-            action, probs = agent.choose_action(old_state)
+            action, probs = agent.choose_action(old_state, direction, position)
             new_state, reward, done, second_flag, info = env.step(action)
+            episode_reward.append(reward)
             _, new_state = env_map.map_step(new_state)
-            distance = get_distance(new_state)
             old_state = new_state
-        if (distance == 0):
+            steps += 1
+            episode_reward.append(reward)
+            if (steps > 250):
+                done = True
+        if (done and reward > 0):
             # log win
             wins += 1
+            steps_per_episode_in_won.append(steps)
+        elif (done and reward <= 0):
+            steps_per_episode_in_won.append(100)
+        cumulative_discounted_rewards.append(calculate_cumulative_discounted_reward(episode_reward, agent.gamma))
         env.close()
-    #print win rate
-    print(f'Policy Win rate: {wins}%')
-    return wins
+    return wins, np.mean(np.array(steps_per_episode_in_won)), np.mean(np.array(cumulative_discounted_rewards))
 
 def show_PPO_probs(dims, agent, env_map):
     n = dims[1] * dims[0]
@@ -343,4 +356,77 @@ def initialize_models(map_dims, continue_training):
                        dummy_position=tf.random.normal(position_shape))
 
   return protagonist_network, antagonist_network, adversary_network
+
+def visualize_performance(data, filename):
+
+
+    # Create a dictionary with your data and appropriate labels
+    dummy_data = {
+        'Category': ['Win Ratio', 'Solved Path Length', 'Shortest Path Length', 'Rewards'],
+        'Values': [85, 78, 50, 0.92]
+    }
+
+    # Create a DataFrame from the dictionary
+    df = pd.DataFrame(data)
+
+    # Define colors for each category
+    colors = ['skyblue', 'orange', 'red', 'lightgreen']
+
+    # Initialize figure and primary axis
+    fig, ax1 = plt.subplots()
+
+    # Plot "Win Ratio", "Solved Path Length", and "Shortest Path Length" on the primary y-axis
+    ax1.bar(df['Category'][0], df['Values'][0], color=colors[0])
+    solved_and_shortest_positions = [1, 1.8]  # Adjust bar positions for visual separation
+    bars_solved = ax1.bar(solved_and_shortest_positions[0], df['Values'][1], color='orange')
+    bars_shortest = ax1.bar(solved_and_shortest_positions[1], df['Values'][2], color='red')
+
+    # Draw a line indicating the difference between path lengths
+    difference = df['Values'][1] - df['Values'][2]
+    ax1.plot([solved_and_shortest_positions[0], solved_and_shortest_positions[1]],
+             [df['Values'][1], df['Values'][2]], color='black', linewidth=1.5, linestyle='--')
+
+    # Add an annotation with a text box for the difference
+    ax1.text(1.4, (df['Values'][1] + df['Values'][2]) / 2,
+             f'Difference: {difference}',
+             ha='center', va='bottom',
+             bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.3'))
+
+    # Secondary y-axis for "Rewards", rightmost
+    ax2 = ax1.twinx()
+    bars_rewards = ax2.bar(3, df['Values'][3], color=colors[3], label='Rewards')
+
+    # Customize plot and axes
+    ax1.set_title('Overview of Performance in Test Map')
+    ax1.set_xlabel('Metrics')
+    ax1.set_ylabel('Value out of 100')
+    ax2.set_ylabel('Rewards')
+
+    # Set y-axis limits to provide more vertical space for both axes
+    ax1.set_ylim(0, 110)  # Primary axis for Win Ratio and Path Lengths
+    ax2.set_ylim(0, 1.1)  # Adjust this limit for Rewards to provide clear space
+
+    # Set x-ticks to align properly with bar positions
+    ax1.set_xticks([0, 1.4, 3])
+    ax1.set_xticklabels(['Win Ratio', 'Path Lengths', 'Rewards'])
+
+    # Add value labels for primary y-axis
+    ax1.text(0, df['Values'][0] + 1, f'{df["Values"][0]}', ha='center', va='bottom')  # Win Ratio
+    for bars in [bars_solved, bars_shortest]:
+        for bar in bars:
+            yval = bar.get_height()
+            ax1.text(bar.get_x() + bar.get_width() / 2, yval + 1, f'{int(yval)}', ha='center', va='bottom')
+
+    # Add value label for secondary y-axis
+    yval = bars_rewards[0].get_height()
+    ax2.text(3, yval + 0.02, f'{df["Values"][3]:.2f}', ha='center', va='bottom')
+
+    # Add legend
+    ax1.legend(loc='upper left')
+    # Save the plot to the specified file
+    plt.savefig(filename, dpi=300)
+    # Show the plot
+    plt.tight_layout()  # Adjust layout to accommodate both y-axes
+    plt.show()
+
 

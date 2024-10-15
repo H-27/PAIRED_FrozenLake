@@ -118,7 +118,7 @@ def run_DQN_random(episodes, map_dims, continue_training, continue_on_episode = 
             tf.summary.scalar('losses', np.mean(pro_losses), step=e)  # Overlap pro_losses and ant_losses
             tf.summary.scalar('win_ratio', pro_win_ratio, step=e)  # Overlap pro_win_ratio and ant_win_ratio
             tf.summary.scalar('rewards', np.mean(pro_episode_reward), step=e)  # Overlap pro_rewards and ant_rewards
-            tf.summary.scalar('shaped_rewards', np.mean(pro_shaped_episode_reward),
+            tf.summary.scalar('shaped_episode_reward', np.mean(pro_shaped_episode_reward),
                               step=e)  # Overlap pro_shaped_episode_reward and ant_shaped_episode_reward
             tf.summary.scalar('steps', np.mean(protagonist_steps), step=e)  # Overlap pro_steps and ant_steps
             tf.summary.scalar('solved_path_length', np.mean(pro_solved_path_length), step=e)
@@ -133,9 +133,7 @@ def run_DQN_random(episodes, map_dims, continue_training, continue_on_episode = 
             tf.summary.scalar('solved_path_length', np.mean(ant_solved_path_length), step=e)
             #tf.summary.scalar('value', value, step=e)
 
-        # reset agent epsilon
-        protagonist.epsilon = agent_epsilon
-        antagonist.epsilon = agent_epsilon
+
         # save adversary after training
         helper.save_model(adversary_network, 'Random_domain/adversary')
         print(f'Episode: {e}')
@@ -189,7 +187,7 @@ def save_tensorboard_name():
         f.write(str(train_log_dir))
 
 if __name__ == '__main__':
-    episodes= 500000
+    episodes= 21000
     map_dims = (10,10)
     continue_training = True
     if continue_training:

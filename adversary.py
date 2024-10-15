@@ -199,7 +199,7 @@ class DQN_Adversary():
 
 
     def train(self, regret):
-        index = self.buffer.memory_counter - 1 % self.buffer.memory_size
+        index = (self.buffer.memory_counter % self.buffer.memory_size) -1
         self.buffer.rewards[index] = regret
         if (self.buffer.memory_counter < self.batch_size):
             return 0
